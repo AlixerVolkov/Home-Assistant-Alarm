@@ -18,6 +18,8 @@ import dev.homepanel.app.network.HomeAssistantWebSocket
 import dev.homepanel.app.network.WakeSensorSummary
 import dev.homepanel.app.network.WeatherClient
 import dev.homepanel.app.network.WeatherForecast
+import dev.homepanel.app.mqtt.DeviceTelemetryReader
+import dev.homepanel.app.mqtt.MqttDeviceBridge
 import java.util.concurrent.TimeUnit
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -75,6 +77,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val weatherClient = WeatherClient(httpClient)
     private val locationResolver = DeviceLocationResolver(application)
     private val rtspCameraServer = RtspCameraServer(application)
+    private val telemetryReader = DeviceTelemetryReader(application)
+    private val mqttDeviceBridge = MqttDeviceBridge(application) { screenOn ->
+        viewModelScope.launch {
+            if (screenOn) wakeDisplay() else forceSleepFromMqtt()
+        }
+    }
 
     private val _settings = MutableStateFlow<PanelSettings?>(null)
     val settings: StateFlow<PanelSettings?> = _settings.asStateFlow()
@@ -105,9 +113,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     val connection = socketClient.state
     val rtspCamera = rtspCameraServer.state
+    val mqttDevice = mqttDeviceBridge.state
 
     private var lastActivityElapsed = SystemClock.elapsedRealtime()
     private var lastGuestVoucherCode: String? = null
+    private var localProximityNear: Boolean? = null
+    private var mqttForcedSleep = false
 
     init {
         viewModelScope.launch {
@@ -116,6 +127,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 _settingsLoaded.value = true
                 userActivity()
                 applyRtspSettings(current)
+                mqttDeviceBridge.applySettings(current)
                 if (current != null && !_editing.value) {
                     connect(current)
                 } else if (current == null) {
@@ -135,6 +147,13 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 updateDisplayMode()
                 rtspCameraServer.refreshStats()
                 delay(1_000L)
+            }
+        }
+
+        viewModelScope.launch {
+            while (isActive) {
+                publishDeviceTelemetry()
+                delay(5_000L)
             }
         }
 
@@ -269,7 +288,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             guestVoucherSensorEntityId = draft.guestVoucherSensorEntityId?.trim()?.takeIf { it.isNotBlank() },
             guestCreateButtonEntityId = draft.guestCreateButtonEntityId?.trim()?.takeIf { it.isNotBlank() },
             guestDeleteButtonEntityId = draft.guestDeleteButtonEntityId?.trim()?.takeIf { it.isNotBlank() },
-            guestQrImageEntityId = draft.guestQrImageEntityId?.trim()?.takeIf { it.isNotBlank() }
+            guestQrImageEntityId = draft.guestQrImageEntityId?.trim()?.takeIf { it.isNotBlank() },
+            mqttHost = draft.mqttHost.trim(),
+            mqttPort = draft.mqttPort.coerceIn(1, 65535),
+            mqttUsername = draft.mqttUsername.trim()
         )
 
         viewModelScope.launch {
@@ -299,6 +321,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             _editing.value = true
             socketClient.disconnect()
             rtspCameraServer.stop()
+            mqttDeviceBridge.disconnect()
             settingsRepository.clear()
             _editing.value = false
             _discovery.value = DiscoveryState()
@@ -370,6 +393,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun userActivity() {
+        mqttForcedSleep = false
         lastActivityElapsed = SystemClock.elapsedRealtime()
         if (_displayMode.value != PanelDisplayMode.ACTIVE) {
             _displayMode.value = PanelDisplayMode.ACTIVE
@@ -382,7 +406,13 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    fun onProximityChanged(isNear: Boolean) {
+        localProximityNear = isNear
+        publishDeviceTelemetry()
+    }
+
     private fun wakeDisplay() {
+        mqttForcedSleep = false
         lastActivityElapsed = SystemClock.elapsedRealtime()
         _displayMode.value = PanelDisplayMode.ACTIVE
         _wakePulse.value = _wakePulse.value + 1L
@@ -399,11 +429,35 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         val saverMs = settings.screensaverTimeoutMinutes.toLong() * 60_000L
         val sleepMs = settings.sleepTimeoutMinutes.toLong() * 60_000L
 
-        _displayMode.value = when {
+        val nextMode = when {
+            mqttForcedSleep -> PanelDisplayMode.SLEEP
             settings.sleepTimeoutMinutes > 0 && idleMs >= sleepMs -> PanelDisplayMode.SLEEP
             settings.screensaverTimeoutMinutes > 0 && idleMs >= saverMs -> PanelDisplayMode.SCREENSAVER
             else -> PanelDisplayMode.ACTIVE
         }
+        if (_displayMode.value != nextMode) {
+            _displayMode.value = nextMode
+            publishDeviceTelemetry()
+        }
+    }
+
+    private fun forceSleepFromMqtt() {
+        mqttForcedSleep = true
+        _displayMode.value = PanelDisplayMode.SLEEP
+        publishDeviceTelemetry()
+    }
+
+    private fun publishDeviceTelemetry() {
+        val rtsp = rtspCameraServer.state.value
+        mqttDeviceBridge.publishTelemetry(
+            telemetryReader.read(
+                proximityNear = localProximityNear,
+                displayMode = _displayMode.value.name.lowercase(),
+                rtspRunning = rtsp.running,
+                rtspClients = rtsp.clientCount,
+                rtspUrl = rtsp.endpoint
+            )
+        )
     }
 
     private suspend fun loadWeather(showSpinner: Boolean) {
@@ -447,6 +501,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     override fun onCleared() {
         socketClient.disconnect()
         rtspCameraServer.stop()
+        mqttDeviceBridge.close()
         httpClient.dispatcher.executorService.shutdown()
         httpClient.connectionPool.evictAll()
         super.onCleared()

@@ -49,4 +49,17 @@
     <string name="guest_wifi_delete_confirm_title">Supprimer ce bon ?</string>
     <string name="guest_wifi_delete_confirm_message">Le bon %1$s sera supprimé de UniFi. Cette action est irréversible.</string>
     <string name="close">Fermer</string>
+    <string name="mqtt_device_title">Appareil Home Assistant</string>
+    <string name="mqtt_device_subtitle">Enregistre HomePanel comme un seul appareil Home Assistant via MQTT Discovery. Publie batterie, température de batterie, charge, proximité, mode écran, état/URL RTSP et un interrupteur de contrôle de l’écran.</string>
+    <string name="mqtt_device_enable">Enregistrer HomePanel via MQTT</string>
+    <string name="mqtt_device_enable_hint">Nécessite l’intégration MQTT de Home Assistant et les identifiants du broker. Les messages de découverte sont conservés pour restaurer l’appareil après un redémarrage.</string>
+    <string name="mqtt_tls">Utiliser MQTT avec TLS</string>
+    <string name="mqtt_tls_hint">Utilise ssl:// et généralement le port 8883. Laissez désactivé pour un broker local de confiance sur le port 1883.</string>
+    <string name="mqtt_host">Hôte du broker MQTT</string>
+    <string name="mqtt_port">Port du broker MQTT</string>
+    <string name="mqtt_username">Utilisateur MQTT</string>
+    <string name="mqtt_password">Mot de passe MQTT</string>
+    <string name="mqtt_status">État de l’appareil MQTT</string>
+    <string name="mqtt_connected">Connecté · HomePanel est enregistré dans Home Assistant</string>
+    <string name="mqtt_save_to_connect">Enregistrez la configuration pour vous connecter et publier MQTT Discovery.</string>
 </resources>

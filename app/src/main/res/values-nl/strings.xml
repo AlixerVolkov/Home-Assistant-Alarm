@@ -54,4 +54,17 @@
     <string name="guest_wifi_delete_confirm_title">Deze voucher verwijderen?</string>
     <string name="guest_wifi_delete_confirm_message">Voucher %1$s wordt uit UniFi verwijderd. Dit kan niet ongedaan worden gemaakt.</string>
     <string name="close">Sluiten</string>
+    <string name="mqtt_device_title">Home Assistant-apparaat</string>
+    <string name="mqtt_device_subtitle">Registreer HomePanel als één Home Assistant-apparaat via MQTT Discovery. Publiceert batterij, batterijtemperatuur, laden, nabijheid, schermmodus, RTSP-status/URL en een bedienbare schermschakelaar.</string>
+    <string name="mqtt_device_enable">HomePanel registreren via MQTT</string>
+    <string name="mqtt_device_enable_hint">Vereist de Home Assistant MQTT-integratie en brokergegevens. Discovery-berichten worden retained gepubliceerd zodat het apparaat terugkomt na een herstart.</string>
+    <string name="mqtt_tls">MQTT via TLS gebruiken</string>
+    <string name="mqtt_tls_hint">Gebruikt ssl:// en meestal poort 8883. Laat uit voor een vertrouwde lokale broker op poort 1883.</string>
+    <string name="mqtt_host">MQTT-brokerhost</string>
+    <string name="mqtt_port">MQTT-brokerpoort</string>
+    <string name="mqtt_username">MQTT-gebruikersnaam</string>
+    <string name="mqtt_password">MQTT-wachtwoord</string>
+    <string name="mqtt_status">MQTT-apparaatstatus</string>
+    <string name="mqtt_connected">Verbonden · HomePanel is geregistreerd in Home Assistant</string>
+    <string name="mqtt_save_to_connect">Sla de configuratie op om te verbinden en MQTT Discovery te publiceren.</string>
 </resources>

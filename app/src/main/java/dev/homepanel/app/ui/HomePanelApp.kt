@@ -46,6 +46,7 @@ fun HomePanelApp(viewModel: MainViewModel) {
     val weather by viewModel.weather.collectAsStateWithLifecycle()
     val guestWifi by viewModel.guestWifi.collectAsStateWithLifecycle()
     val rtspCamera by viewModel.rtspCamera.collectAsStateWithLifecycle()
+    val mqttDevice by viewModel.mqttDevice.collectAsStateWithLifecycle()
     val displayMode by viewModel.displayMode.collectAsStateWithLifecycle()
     val wakePulse by viewModel.wakePulse.collectAsStateWithLifecycle()
 
@@ -94,10 +95,10 @@ fun HomePanelApp(viewModel: MainViewModel) {
         }
     }
 
-    // The tablet's own proximity sensor is used only while the saver/sleep screen is active.
-    // Waking on a FAR -> NEAR edge avoids continuous wake events from noisy proximity sensors.
+    // Keep the proximity sensor active so its state can also be exported to Home Assistant.
+    // Waking on a FAR -> NEAR edge only happens while saver/sleep is active.
     DisposableEffect(context, settings?.proximityWakeEnabled, displayMode) {
-        val shouldListen = settings?.proximityWakeEnabled == true && displayMode != PanelDisplayMode.ACTIVE
+        val shouldListen = settings?.proximityWakeEnabled == true
         if (!shouldListen) return@DisposableEffect onDispose { }
 
         val sensorManager = context.getSystemService(Context.SENSOR_SERVICE) as SensorManager
@@ -110,7 +111,10 @@ fun HomePanelApp(viewModel: MainViewModel) {
                 val distance = event.values.firstOrNull() ?: return
                 val isNear = distance < event.sensor.maximumRange
                 val now = SystemClock.elapsedRealtime()
-                if (isNear && !wasNear && now - lastWakeElapsed >= PROXIMITY_DEBOUNCE_MS) {
+                viewModel.onProximityChanged(isNear)
+                if (displayMode != PanelDisplayMode.ACTIVE &&
+                    isNear && !wasNear && now - lastWakeElapsed >= PROXIMITY_DEBOUNCE_MS
+                ) {
                     lastWakeElapsed = now
                     viewModel.onLocalDetection()
                 }
@@ -160,6 +164,7 @@ fun HomePanelApp(viewModel: MainViewModel) {
                 initialSettings = currentSettings,
                 discoveryState = discovery,
                 rtspCameraState = rtspCamera,
+                mqttDeviceState = mqttDevice,
                 canCancel = currentSettings != null,
                 onDiscover = viewModel::discoverAlarms,
                 onSave = viewModel::saveConfiguration,

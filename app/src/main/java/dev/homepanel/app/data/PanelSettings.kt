@@ -13,5 +13,11 @@ data class PanelSettings(
     val guestVoucherSensorEntityId: String? = null,
     val guestCreateButtonEntityId: String? = null,
     val guestDeleteButtonEntityId: String? = null,
-    val guestQrImageEntityId: String? = null
+    val guestQrImageEntityId: String? = null,
+    val mqttDiscoveryEnabled: Boolean = false,
+    val mqttHost: String = "",
+    val mqttPort: Int = 1883,
+    val mqttUsername: String = "",
+    val mqttPassword: String = "",
+    val mqttTls: Boolean = false
 )

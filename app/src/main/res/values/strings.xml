@@ -108,4 +108,17 @@
     <string name="guest_wifi_delete_confirm_title">Delete this voucher?</string>
     <string name="guest_wifi_delete_confirm_message">Voucher %1$s will be deleted from UniFi. This cannot be undone.</string>
     <string name="close">Close</string>
+    <string name="mqtt_device_title">Home Assistant device</string>
+    <string name="mqtt_device_subtitle">Register HomePanel as one Home Assistant device using MQTT Discovery. It publishes battery, battery temperature, charging, proximity, display mode, RTSP status/URL and a controllable screen switch.</string>
+    <string name="mqtt_device_enable">Register HomePanel with MQTT</string>
+    <string name="mqtt_device_enable_hint">Requires the Home Assistant MQTT integration and broker credentials. Discovery messages are retained so the device returns after Home Assistant restarts.</string>
+    <string name="mqtt_tls">Use MQTT over TLS</string>
+    <string name="mqtt_tls_hint">Use ssl:// and usually port 8883. Leave off for a trusted local broker on port 1883.</string>
+    <string name="mqtt_host">MQTT broker host</string>
+    <string name="mqtt_port">MQTT broker port</string>
+    <string name="mqtt_username">MQTT username</string>
+    <string name="mqtt_password">MQTT password</string>
+    <string name="mqtt_status">MQTT device status</string>
+    <string name="mqtt_connected">Connected · HomePanel is registered in Home Assistant</string>
+    <string name="mqtt_save_to_connect">Save the configuration to connect and publish MQTT Discovery.</string>
 </resources>

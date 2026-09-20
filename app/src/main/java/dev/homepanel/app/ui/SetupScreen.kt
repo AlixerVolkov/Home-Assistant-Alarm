@@ -43,12 +43,15 @@ import dev.homepanel.app.DiscoveryState
 import dev.homepanel.app.R
 import dev.homepanel.app.camera.RtspCameraState
 import dev.homepanel.app.data.PanelSettings
+import dev.homepanel.app.mqtt.MqttDeviceState
+import java.net.URI
 
 @Composable
 fun SetupScreen(
     initialSettings: PanelSettings?,
     discoveryState: DiscoveryState,
     rtspCameraState: RtspCameraState,
+    mqttDeviceState: MqttDeviceState,
     canCancel: Boolean,
     onDiscover: (String, String) -> Unit,
     onSave: (PanelSettings) -> Unit,
@@ -93,6 +96,24 @@ fun SetupScreen(
     }
     var guestQrImage by rememberSaveable(initialSettings?.guestQrImageEntityId) {
         mutableStateOf(initialSettings?.guestQrImageEntityId.orEmpty())
+    }
+    var mqttDiscoveryEnabled by rememberSaveable(initialSettings?.mqttDiscoveryEnabled) {
+        mutableStateOf(initialSettings?.mqttDiscoveryEnabled ?: false)
+    }
+    var mqttHost by rememberSaveable(initialSettings?.mqttHost) {
+        mutableStateOf(initialSettings?.mqttHost.orEmpty())
+    }
+    var mqttPort by rememberSaveable(initialSettings?.mqttPort) {
+        mutableStateOf((initialSettings?.mqttPort ?: 1883).toString())
+    }
+    var mqttUsername by rememberSaveable(initialSettings?.mqttUsername) {
+        mutableStateOf(initialSettings?.mqttUsername.orEmpty())
+    }
+    var mqttPassword by rememberSaveable(initialSettings?.mqttPassword) {
+        mutableStateOf(initialSettings?.mqttPassword.orEmpty())
+    }
+    var mqttTls by rememberSaveable(initialSettings?.mqttTls) {
+        mutableStateOf(initialSettings?.mqttTls ?: false)
     }
 
     LaunchedEffect(discoveryState.guestWifi) {
@@ -442,6 +463,91 @@ fun SetupScreen(
 
                 HorizontalDivider()
 
+                Text(stringResource(R.string.mqtt_device_title), style = MaterialTheme.typography.titleMedium)
+                Text(
+                    stringResource(R.string.mqtt_device_subtitle),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                SettingsSwitchRow(
+                    title = stringResource(R.string.mqtt_device_enable),
+                    subtitle = stringResource(R.string.mqtt_device_enable_hint),
+                    checked = mqttDiscoveryEnabled,
+                    onCheckedChange = { enabled ->
+                        mqttDiscoveryEnabled = enabled
+                        if (enabled && mqttHost.isBlank()) {
+                            mqttHost = deriveHost(baseUrl)
+                        }
+                        if (enabled && mqttPort.isBlank()) mqttPort = if (mqttTls) "8883" else "1883"
+                    }
+                )
+                if (mqttDiscoveryEnabled) {
+                    SettingsSwitchRow(
+                        title = stringResource(R.string.mqtt_tls),
+                        subtitle = stringResource(R.string.mqtt_tls_hint),
+                        checked = mqttTls,
+                        onCheckedChange = { enabled ->
+                            mqttTls = enabled
+                            if (mqttPort == "1883" || mqttPort == "8883") {
+                                mqttPort = if (enabled) "8883" else "1883"
+                            }
+                        }
+                    )
+                    OutlinedTextField(
+                        value = mqttHost,
+                        onValueChange = { mqttHost = it.trim() },
+                        modifier = Modifier.fillMaxWidth(),
+                        label = { Text(stringResource(R.string.mqtt_host)) },
+                        placeholder = { Text(deriveHost(baseUrl).ifBlank { "192.168.1.10" }) },
+                        singleLine = true
+                    )
+                    OutlinedTextField(
+                        value = mqttPort,
+                        onValueChange = { mqttPort = it.filter(Char::isDigit).take(5) },
+                        modifier = Modifier.fillMaxWidth(),
+                        label = { Text(stringResource(R.string.mqtt_port)) },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        singleLine = true
+                    )
+                    OutlinedTextField(
+                        value = mqttUsername,
+                        onValueChange = { mqttUsername = it },
+                        modifier = Modifier.fillMaxWidth(),
+                        label = { Text(stringResource(R.string.mqtt_username)) },
+                        singleLine = true
+                    )
+                    OutlinedTextField(
+                        value = mqttPassword,
+                        onValueChange = { mqttPassword = it },
+                        modifier = Modifier.fillMaxWidth(),
+                        label = { Text(stringResource(R.string.mqtt_password)) },
+                        singleLine = true,
+                        visualTransformation = PasswordVisualTransformation(),
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password)
+                    )
+                    Card(modifier = Modifier.fillMaxWidth()) {
+                        Column(
+                            modifier = Modifier.padding(14.dp),
+                            verticalArrangement = Arrangement.spacedBy(5.dp)
+                        ) {
+                            Text(stringResource(R.string.mqtt_status), style = MaterialTheme.typography.titleSmall)
+                            Text(
+                                when {
+                                    mqttDeviceState.connected -> stringResource(R.string.mqtt_connected)
+                                    !mqttDeviceState.errorMessage.isNullOrBlank() -> mqttDeviceState.errorMessage.orEmpty()
+                                    else -> stringResource(R.string.mqtt_save_to_connect)
+                                },
+                                style = MaterialTheme.typography.bodySmall,
+                                color = if (!mqttDeviceState.errorMessage.isNullOrBlank() && !mqttDeviceState.connected)
+                                    MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            mqttDeviceState.brokerUri?.let { Text(it, style = MaterialTheme.typography.labelSmall) }
+                        }
+                    }
+                }
+
+                HorizontalDivider()
+
                 Text(stringResource(R.string.display_title), style = MaterialTheme.typography.titleMedium)
                 Text(
                     stringResource(R.string.display_subtitle),
@@ -494,11 +600,18 @@ fun SetupScreen(
                                     guestVoucherSensorEntityId = guestVoucherSensor.takeIf { it.isNotBlank() },
                                     guestCreateButtonEntityId = guestCreateButton.takeIf { it.isNotBlank() },
                                     guestDeleteButtonEntityId = guestDeleteButton.takeIf { it.isNotBlank() },
-                                    guestQrImageEntityId = guestQrImage.takeIf { it.isNotBlank() }
+                                    guestQrImageEntityId = guestQrImage.takeIf { it.isNotBlank() },
+                                    mqttDiscoveryEnabled = mqttDiscoveryEnabled,
+                                    mqttHost = mqttHost,
+                                    mqttPort = mqttPort.toIntOrNull() ?: if (mqttTls) 8883 else 1883,
+                                    mqttUsername = mqttUsername,
+                                    mqttPassword = mqttPassword,
+                                    mqttTls = mqttTls
                                 )
                             )
                         },
-                        enabled = baseUrl.isNotBlank() && token.isNotBlank() && entityId.isNotBlank(),
+                        enabled = baseUrl.isNotBlank() && token.isNotBlank() && entityId.isNotBlank() &&
+                            (!mqttDiscoveryEnabled || mqttHost.isNotBlank()),
                         modifier = Modifier.weight(1f)
                     ) {
                         Text(stringResource(R.string.save_connect))
@@ -548,6 +661,12 @@ private fun SettingsSwitchRow(
         }
     }
 }
+
+
+private fun deriveHost(baseUrl: String): String = runCatching {
+    val normalized = if (baseUrl.contains("://")) baseUrl else "http://$baseUrl"
+    URI(normalized).host.orEmpty()
+}.getOrDefault("")
 
 @Composable
 private fun TimeoutField(value: String, onValueChange: (String) -> Unit, labelRes: Int) {

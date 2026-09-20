@@ -59,3 +59,14 @@
 - [ ] Signed release APK/AAB
 - [ ] Upgrade/migration strategy
 - [ ] Documentation and screenshots
+
+## v0.5.0 - Home Assistant device registration
+
+- [x] MQTT Discovery device
+- [x] Battery percentage and battery temperature
+- [x] Charging state
+- [x] Android proximity state
+- [x] Remote screen switch
+- [x] Display mode diagnostics
+- [x] RTSP status, client count and URL diagnostics
+- [ ] Native `camera.*` entity (requires snapshot or custom HA integration; RTSP URL alone is not an MQTT Camera payload)

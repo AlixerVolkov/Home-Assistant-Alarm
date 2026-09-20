@@ -42,7 +42,16 @@ class SettingsRepository(
                     ?: preferences[KEY_GUEST_CREATE_BUTTON]
                         ?.takeIf { it.isNotBlank() && it.endsWith("_create") }
                         ?.let { it.removeSuffix("_create") + "_delete" },
-                guestQrImageEntityId = preferences[KEY_GUEST_QR_IMAGE]?.takeIf { it.isNotBlank() }
+                guestQrImageEntityId = preferences[KEY_GUEST_QR_IMAGE]?.takeIf { it.isNotBlank() },
+                mqttDiscoveryEnabled = preferences[KEY_MQTT_DISCOVERY_ENABLED] ?: false,
+                mqttHost = preferences[KEY_MQTT_HOST].orEmpty(),
+                mqttPort = preferences[KEY_MQTT_PORT] ?: 1883,
+                mqttUsername = preferences[KEY_MQTT_USERNAME].orEmpty(),
+                mqttPassword = preferences[KEY_MQTT_PASSWORD]
+                    ?.takeIf { it.isNotBlank() }
+                    ?.let { runCatching { cryptoManager.decrypt(it) }.getOrDefault("") }
+                    .orEmpty(),
+                mqttTls = preferences[KEY_MQTT_TLS] ?: false
             )
         }
         .catch { emit(null) }
@@ -62,6 +71,16 @@ class SettingsRepository(
             preferences[KEY_GUEST_CREATE_BUTTON] = settings.guestCreateButtonEntityId?.trim().orEmpty()
             preferences[KEY_GUEST_DELETE_BUTTON] = settings.guestDeleteButtonEntityId?.trim().orEmpty()
             preferences[KEY_GUEST_QR_IMAGE] = settings.guestQrImageEntityId?.trim().orEmpty()
+            preferences[KEY_MQTT_DISCOVERY_ENABLED] = settings.mqttDiscoveryEnabled
+            preferences[KEY_MQTT_HOST] = settings.mqttHost.trim()
+            preferences[KEY_MQTT_PORT] = settings.mqttPort.coerceIn(1, 65535)
+            preferences[KEY_MQTT_USERNAME] = settings.mqttUsername.trim()
+            if (settings.mqttPassword.isBlank()) {
+                preferences.remove(KEY_MQTT_PASSWORD)
+            } else {
+                preferences[KEY_MQTT_PASSWORD] = cryptoManager.encrypt(settings.mqttPassword)
+            }
+            preferences[KEY_MQTT_TLS] = settings.mqttTls
         }
     }
 
@@ -80,6 +99,12 @@ class SettingsRepository(
             preferences.remove(KEY_GUEST_CREATE_BUTTON)
             preferences.remove(KEY_GUEST_DELETE_BUTTON)
             preferences.remove(KEY_GUEST_QR_IMAGE)
+            preferences.remove(KEY_MQTT_DISCOVERY_ENABLED)
+            preferences.remove(KEY_MQTT_HOST)
+            preferences.remove(KEY_MQTT_PORT)
+            preferences.remove(KEY_MQTT_USERNAME)
+            preferences.remove(KEY_MQTT_PASSWORD)
+            preferences.remove(KEY_MQTT_TLS)
         }
     }
 
@@ -97,5 +122,11 @@ class SettingsRepository(
         private val KEY_GUEST_CREATE_BUTTON = stringPreferencesKey("guest_create_button")
         private val KEY_GUEST_DELETE_BUTTON = stringPreferencesKey("guest_delete_button")
         private val KEY_GUEST_QR_IMAGE = stringPreferencesKey("guest_qr_image")
+        private val KEY_MQTT_DISCOVERY_ENABLED = booleanPreferencesKey("mqtt_discovery_enabled")
+        private val KEY_MQTT_HOST = stringPreferencesKey("mqtt_host")
+        private val KEY_MQTT_PORT = intPreferencesKey("mqtt_port")
+        private val KEY_MQTT_USERNAME = stringPreferencesKey("mqtt_username")
+        private val KEY_MQTT_PASSWORD = stringPreferencesKey("mqtt_password")
+        private val KEY_MQTT_TLS = booleanPreferencesKey("mqtt_tls")
     }
 }
