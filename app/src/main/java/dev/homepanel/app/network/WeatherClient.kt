@@ -1,0 +1,88 @@
+package dev.homepanel.app.network
+
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import okhttp3.HttpUrl.Companion.toHttpUrl
+import okhttp3.OkHttpClient
+import okhttp3.Request
+import org.json.JSONArray
+import org.json.JSONObject
+
+class WeatherClient(
+    private val client: OkHttpClient
+) {
+    suspend fun fetchEkerenForecast(): WeatherForecast = withContext(Dispatchers.IO) {
+        val url = API_URL.toHttpUrl().newBuilder()
+            .addQueryParameter("latitude", EKEREN_LATITUDE)
+            .addQueryParameter("longitude", EKEREN_LONGITUDE)
+            .addQueryParameter(
+                "current",
+                "temperature_2m,apparent_temperature,weather_code,wind_speed_10m"
+            )
+            .addQueryParameter(
+                "daily",
+                "weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max"
+            )
+            .addQueryParameter("timezone", "Europe/Brussels")
+            .addQueryParameter("forecast_days", "5")
+            .build()
+
+        val request = Request.Builder().url(url).get().build()
+
+        client.newCall(request).execute().use { response ->
+            if (!response.isSuccessful) {
+                error("Weather service returned HTTP ${response.code}")
+            }
+
+            val json = JSONObject(response.body.string())
+            val currentJson = json.getJSONObject("current")
+            val dailyJson = json.getJSONObject("daily")
+
+            val current = CurrentWeather(
+                temperatureC = currentJson.getDouble("temperature_2m"),
+                apparentTemperatureC = currentJson.getDouble("apparent_temperature"),
+                weatherCode = currentJson.getInt("weather_code"),
+                windSpeedKmh = currentJson.getDouble("wind_speed_10m")
+            )
+
+            val dates = dailyJson.getJSONArray("time")
+            val codes = dailyJson.getJSONArray("weather_code")
+            val maximums = dailyJson.getJSONArray("temperature_2m_max")
+            val minimums = dailyJson.getJSONArray("temperature_2m_min")
+            val rain = dailyJson.getJSONArray("precipitation_probability_max")
+
+            val days = buildList {
+                val count = minOf(5, dates.length())
+                for (index in 0 until count) {
+                    add(
+                        DailyForecast(
+                            date = dates.getString(index),
+                            weatherCode = intAt(codes, index),
+                            minimumC = doubleAt(minimums, index),
+                            maximumC = doubleAt(maximums, index),
+                            precipitationProbability = intAt(rain, index)
+                        )
+                    )
+                }
+            }
+
+            WeatherForecast(current = current, daily = days)
+        }
+    }
+
+    private fun doubleAt(array: JSONArray, index: Int): Double {
+        val value = array.opt(index) ?: return 0.0
+        return value.toString().toDoubleOrNull() ?: 0.0
+    }
+
+    private fun intAt(array: JSONArray, index: Int): Int {
+        val value = array.opt(index) ?: return 0
+        return value.toString().toDoubleOrNull()?.toInt() ?: 0
+    }
+
+    companion object {
+        private const val API_URL = "https://api.open-meteo.com/v1/forecast"
+        private const val EKEREN_LATITUDE = "51.2806"
+        private const val EKEREN_LONGITUDE = "4.4184"
+    }
+}

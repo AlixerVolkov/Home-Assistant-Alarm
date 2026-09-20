@@ -17,7 +17,7 @@ class HomeAssistantWebSocket(
     private val client: OkHttpClient
 ) {
     private val nextId = AtomicInteger(1)
-    private val actionRequestIds = ConcurrentHashMap.newKeySet<Int>()
+    private val actionRequestIds = ConcurrentHashMap<Int, AlarmAction>()
 
     private val _state = MutableStateFlow(HomeAssistantConnectionState())
     val state: StateFlow<HomeAssistantConnectionState> = _state.asStateFlow()
@@ -64,8 +64,23 @@ class HomeAssistantWebSocket(
             return
         }
 
+        val alarm = _state.value.alarm
+        if (alarm != null && !alarm.canPerform(action)) {
+            _state.value = _state.value.copy(
+                actionErrorMessage = "This action is not available from the current alarm state"
+            )
+            return
+        }
+
+        if (alarm?.requiresCode(action) == true && code.isNullOrBlank()) {
+            _state.value = _state.value.copy(
+                actionErrorMessage = "A PIN/code is required for this action"
+            )
+            return
+        }
+
         val requestId = nextId.getAndIncrement()
-        actionRequestIds += requestId
+        actionRequestIds[requestId] = action
 
         val payload = JSONObject()
             .put("id", requestId)
@@ -75,14 +90,19 @@ class HomeAssistantWebSocket(
             .put("target", JSONObject().put("entity_id", alarmEntityId))
 
         if (!code.isNullOrBlank()) {
-            payload.put("service_data", JSONObject().put("code", code))
+            payload.put("service_data", JSONObject().put("code", code.trim()))
         }
 
-        _state.value = _state.value.copy(actionErrorMessage = null)
+        _state.value = _state.value.copy(
+            actionErrorMessage = null,
+            pendingAction = action
+        )
+
         if (!socket.send(payload.toString())) {
-            actionRequestIds -= requestId
+            actionRequestIds.remove(requestId)
             _state.value = _state.value.copy(
-                actionErrorMessage = "Could not send command"
+                actionErrorMessage = "Could not send command",
+                pendingAction = null
             )
         }
     }
@@ -101,7 +121,8 @@ class HomeAssistantWebSocket(
             runCatching { handleMessage(webSocket, JSONObject(text)) }
                 .onFailure { error ->
                     _state.value = _state.value.copy(
-                        errorMessage = error.message ?: "Invalid message from Home Assistant"
+                        errorMessage = error.message ?: "Invalid message from Home Assistant",
+                        pendingAction = null
                     )
                 }
         }
@@ -114,7 +135,10 @@ class HomeAssistantWebSocket(
         override fun onClosed(webSocket: WebSocket, code: Int, reason: String) {
             if (this@HomeAssistantWebSocket.webSocket !== webSocket) return
             this@HomeAssistantWebSocket.webSocket = null
-            _state.value = _state.value.copy(status = ConnectionStatus.DISCONNECTED)
+            _state.value = _state.value.copy(
+                status = ConnectionStatus.DISCONNECTED,
+                pendingAction = null
+            )
         }
 
         override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
@@ -122,7 +146,8 @@ class HomeAssistantWebSocket(
             this@HomeAssistantWebSocket.webSocket = null
             _state.value = _state.value.copy(
                 status = ConnectionStatus.ERROR,
-                errorMessage = t.message ?: "WebSocket connection failed"
+                errorMessage = t.message ?: "WebSocket connection failed",
+                pendingAction = null
             )
         }
     }
@@ -134,7 +159,8 @@ class HomeAssistantWebSocket(
             "auth_invalid" -> {
                 _state.value = _state.value.copy(
                     status = ConnectionStatus.ERROR,
-                    errorMessage = message.optString("message", "Invalid Home Assistant token")
+                    errorMessage = message.optString("message", "Invalid Home Assistant token"),
+                    pendingAction = null
                 )
                 this@HomeAssistantWebSocket.webSocket = null
                 socket.close(1008, "Authentication failed")
@@ -207,12 +233,17 @@ class HomeAssistantWebSocket(
             return
         }
 
-        if (actionRequestIds.remove(requestId)) {
+        val action = actionRequestIds.remove(requestId)
+        if (action != null) {
             if (message.optBoolean("success", false)) {
-                _state.value = _state.value.copy(actionErrorMessage = null)
+                _state.value = _state.value.copy(
+                    actionErrorMessage = null,
+                    pendingAction = null
+                )
             } else {
                 _state.value = _state.value.copy(
-                    actionErrorMessage = extractError(message, "Alarm command failed")
+                    actionErrorMessage = extractError(message, "Alarm command failed"),
+                    pendingAction = null
                 )
             }
         }
@@ -224,7 +255,11 @@ class HomeAssistantWebSocket(
         if (data.optString("entity_id") != alarmEntityId) return
 
         val newState = data.optJSONObject("new_state") ?: return
-        _state.value = _state.value.copy(alarm = parseAlarmState(newState))
+        _state.value = _state.value.copy(
+            alarm = parseAlarmState(newState),
+            actionErrorMessage = null,
+            pendingAction = null
+        )
     }
 
     private fun parseAlarmState(item: JSONObject): AlarmEntityState {
@@ -241,6 +276,8 @@ class HomeAssistantWebSocket(
             supportedFeatures = attributes?.optInt("supported_features", 0) ?: 0,
             codeArmRequired = attributes?.optBoolean("code_arm_required", true) ?: true,
             codeFormat = attributes?.optString("code_format")
+                ?.takeIf { it.isNotBlank() && it != "null" },
+            changedBy = attributes?.optString("changed_by")
                 ?.takeIf { it.isNotBlank() && it != "null" }
         )
     }

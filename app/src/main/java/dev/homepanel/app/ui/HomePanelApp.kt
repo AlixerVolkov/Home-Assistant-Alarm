@@ -17,6 +17,7 @@ fun HomePanelApp(viewModel: MainViewModel) {
     val editing by viewModel.editing.collectAsStateWithLifecycle()
     val discovery by viewModel.discovery.collectAsStateWithLifecycle()
     val connection by viewModel.connection.collectAsStateWithLifecycle()
+    val weather by viewModel.weather.collectAsStateWithLifecycle()
 
     if (!settingsLoaded) {
         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -40,8 +41,10 @@ fun HomePanelApp(viewModel: MainViewModel) {
         AlarmScreen(
             settings = currentSettings,
             connectionState = connection,
+            weatherState = weather,
             onAction = viewModel::performAction,
             onReconnect = viewModel::reconnect,
+            onRefreshWeather = viewModel::refreshWeather,
             onSettings = viewModel::editConfiguration
         )
     }
