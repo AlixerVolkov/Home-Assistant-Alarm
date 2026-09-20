@@ -43,3 +43,4 @@ HomePanel deliberately uses a low-power in-app sleep mode instead of fully power
 ## Security
 
 The access token is stored encrypted with Android Keystore. Prefer HTTPS/WSS for Home Assistant.
+OK
