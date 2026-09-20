@@ -6,13 +6,14 @@ plugins {
 android {
     namespace = "dev.homepanel.app"
     compileSdk = 37
+    compileSdkMinor = 0
 
     defaultConfig {
         applicationId = "dev.homepanel.app"
         minSdk = 26
         targetSdk = 37
-        versionCode = 1
-        versionName = "0.1.0"
+        versionCode = 2
+        versionName = "0.1.2"
     }
 
     buildFeatures {
