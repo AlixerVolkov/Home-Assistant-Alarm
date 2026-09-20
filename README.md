@@ -105,3 +105,9 @@ versionName = 0.6.0
 ## Kiosk
 
 El modo kiosk de v0.6.0 oculta barras de sistema y puede exigir PIN para entrar en Configuracion. No convierte automaticamente el dispositivo en Android Device Owner; un bloqueo total de cambio de aplicaciones requiere provisionamiento adicional y queda como mejora futura.
+
+## Android 17 permissions (v0.6.1)
+
+HomePanel serializes Local network, Camera and Location permission requests. On Android 17+ it first explains and requests `ACCESS_LOCAL_NETWORK`; only after that flow finishes does it request camera/location permissions. MQTT, Home Assistant LAN access and RTSP are retried when Local network access is granted.
+
+HomePanel also checks Android unused-app restrictions. For a permanently mounted panel, disabling **Pause app activity if unused / Manage app if unused** is recommended. Android does not allow a normal app to switch this off silently, so HomePanel opens the official system settings page for the user to confirm it.

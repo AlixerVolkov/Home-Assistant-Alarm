@@ -159,4 +159,16 @@
     <string name="settings_pin_prompt">Enter the kiosk PIN to open HomePanel settings.</string>
     <string name="settings_pin_incorrect">Incorrect PIN</string>
     <string name="settings_unlock">Unlock</string>
+
+    <string name="allow">Allow</string>
+    <string name="not_now">Not now</string>
+    <string name="local_network_permission_title">Allow local network access</string>
+    <string name="local_network_permission_message">HomePanel needs local network access to connect to Home Assistant, MQTT and the RTSP camera server. Android 17 requires this permission explicitly.</string>
+    <string name="local_network_missing_title">Local network access is disabled</string>
+    <string name="local_network_missing_message">MQTT, Home Assistant on your LAN and RTSP can time out until Local network access is enabled for HomePanel. Open Android app settings and allow Local network access.</string>
+    <string name="open_app_settings">Open app settings</string>
+    <string name="continue_limited">Continue with limited access</string>
+    <string name="unused_app_title">Keep HomePanel active</string>
+    <string name="unused_app_message">For a wall panel, disable Android's “Pause app activity if unused” / “Manage app if unused” option. Otherwise Android can revoke runtime permissions or hibernate HomePanel after a long period of inactivity.</string>
+    <string name="later">Later</string>
 </resources>

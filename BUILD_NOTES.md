@@ -38,3 +38,11 @@ Requiere los repository secrets existentes:
 - Estructura repo-root y workflows revisados.
 
 No se ejecuto `assembleRelease` localmente porque este contenedor no dispone de Android SDK/Gradle completos; la compilacion definitiva la valida GitHub Actions.
+
+## v0.6.1 permission hardening
+
+- Runtime permission requests are serialized: Local network -> Camera -> Location.
+- RTSP refuses to start on Android 17+ until `ACCESS_LOCAL_NETWORK` is granted.
+- MQTT already waits for `ACCESS_LOCAL_NETWORK`; HomePanel retries it after grant.
+- Home Assistant LAN/WebSocket connection is retried after grant.
+- Unused-app restriction / hibernation status is checked through AndroidX Core and the user can jump to the OS settings page to disable it.

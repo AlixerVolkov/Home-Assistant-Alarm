@@ -48,6 +48,9 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
+import androidx.core.content.IntentCompat
+import androidx.core.content.PackageManagerCompat
+import androidx.core.content.UnusedAppRestrictionsConstants
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
@@ -80,6 +83,15 @@ fun HomePanelApp(viewModel: MainViewModel) {
     var showSettingsPin by rememberSaveable { mutableStateOf(false) }
     var pendingInstallerUri by rememberSaveable { mutableStateOf<String?>(null) }
 
+    // Permission requests must be serialized. Android can drop/short-circuit one runtime
+    // permission request when multiple launchers are fired during the same startup frame.
+    // 0 = local network, 1 = camera (when RTSP is enabled), 2 = location, 3 = complete.
+    var startupPermissionStage by rememberSaveable { mutableStateOf(0) }
+    var showLocalNetworkIntro by rememberSaveable { mutableStateOf(false) }
+    var showLocalNetworkDenied by rememberSaveable { mutableStateOf(false) }
+    var showUnusedAppRestrictions by rememberSaveable { mutableStateOf(false) }
+    var unusedAppStatusChecked by rememberSaveable { mutableStateOf(false) }
+
     val unknownSourcesLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.StartActivityForResult()
     ) {
@@ -97,36 +109,121 @@ fun HomePanelApp(viewModel: MainViewModel) {
         ActivityResultContracts.RequestMultiplePermissions()
     ) { result ->
         if (result.values.any { it }) viewModel.refreshDeviceLocation()
+        startupPermissionStage = 3
     }
 
     val cameraPermissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission()
-    ) { granted -> viewModel.onCameraPermissionResult(granted) }
+    ) { granted ->
+        viewModel.onCameraPermissionResult(granted)
+        startupPermissionStage = 2
+    }
 
     val localNetworkPermissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission()
-    ) { granted -> viewModel.onLocalNetworkPermissionResult(granted) }
+    ) { granted ->
+        viewModel.onLocalNetworkPermissionResult(granted)
+        showLocalNetworkDenied = !granted
+        startupPermissionStage = 1
+    }
 
-    LaunchedEffect(Unit) {
-        if (viewModel.hasLocationPermission()) {
-            viewModel.refreshDeviceLocation()
-        } else {
-            locationPermissionLauncher.launch(
-                arrayOf(Manifest.permission.ACCESS_COARSE_LOCATION, Manifest.permission.ACCESS_FINE_LOCATION)
-            )
-        }
-
-        if (Build.VERSION.SDK_INT >= 37 &&
-            ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_LOCAL_NETWORK) != PackageManager.PERMISSION_GRANTED
-        ) {
-            localNetworkPermissionLauncher.launch(Manifest.permission.ACCESS_LOCAL_NETWORK)
+    val appDetailsLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) {
+        if (Build.VERSION.SDK_INT >= 37) {
+            val granted = ContextCompat.checkSelfPermission(
+                context,
+                Manifest.permission.ACCESS_LOCAL_NETWORK
+            ) == PackageManager.PERMISSION_GRANTED
+            viewModel.onLocalNetworkPermissionResult(granted)
+            showLocalNetworkDenied = !granted
+            if (granted && startupPermissionStage == 0) startupPermissionStage = 1
         }
     }
 
-    LaunchedEffect(settings?.rtspEnabled) {
-        if (settings?.rtspEnabled == true && !viewModel.hasCameraPermission()) {
+    val unusedAppRestrictionsLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) {
+        // Re-check next time the app is opened. The OS settings screen owns this toggle and
+        // normal applications are intentionally not allowed to disable it silently.
+        showUnusedAppRestrictions = false
+    }
+
+    LaunchedEffect(startupPermissionStage, settingsLoaded, settings?.rtspEnabled, showLocalNetworkDenied) {
+        if (showLocalNetworkDenied) return@LaunchedEffect
+        when (startupPermissionStage) {
+            0 -> {
+                if (Build.VERSION.SDK_INT >= 37 &&
+                    ContextCompat.checkSelfPermission(
+                        context,
+                        Manifest.permission.ACCESS_LOCAL_NETWORK
+                    ) != PackageManager.PERMISSION_GRANTED
+                ) {
+                    showLocalNetworkIntro = true
+                } else {
+                    // Also re-apply LAN services when the permission was already granted before
+                    // this process started.
+                    if (Build.VERSION.SDK_INT >= 37) viewModel.onLocalNetworkPermissionResult(true)
+                    startupPermissionStage = 1
+                }
+            }
+            1 -> {
+                // Never stack CAMERA on top of the Android local-network permission prompt.
+                val localNetworkGranted = Build.VERSION.SDK_INT < 37 ||
+                    ContextCompat.checkSelfPermission(
+                        context,
+                        Manifest.permission.ACCESS_LOCAL_NETWORK
+                    ) == PackageManager.PERMISSION_GRANTED
+                if (settingsLoaded && settings?.rtspEnabled == true && localNetworkGranted &&
+                    !viewModel.hasCameraPermission()
+                ) {
+                    cameraPermissionLauncher.launch(Manifest.permission.CAMERA)
+                } else if (settingsLoaded) {
+                    startupPermissionStage = 2
+                }
+            }
+            2 -> {
+                if (viewModel.hasLocationPermission()) {
+                    viewModel.refreshDeviceLocation()
+                    startupPermissionStage = 3
+                } else {
+                    locationPermissionLauncher.launch(
+                        arrayOf(
+                            Manifest.permission.ACCESS_COARSE_LOCATION,
+                            Manifest.permission.ACCESS_FINE_LOCATION
+                        )
+                    )
+                }
+            }
+        }
+    }
+
+    // If RTSP is enabled later from Settings, request CAMERA only after LAN permission is ready.
+    LaunchedEffect(settings?.rtspEnabled, startupPermissionStage) {
+        val localNetworkGranted = Build.VERSION.SDK_INT < 37 ||
+            ContextCompat.checkSelfPermission(
+                context,
+                Manifest.permission.ACCESS_LOCAL_NETWORK
+            ) == PackageManager.PERMISSION_GRANTED
+        if (startupPermissionStage >= 3 && settings?.rtspEnabled == true &&
+            localNetworkGranted && !viewModel.hasCameraPermission()
+        ) {
             cameraPermissionLauncher.launch(Manifest.permission.CAMERA)
         }
+    }
+
+    // Android can revoke runtime permissions and hibernate apps that remain unused. A wall-panel
+    // app should normally be exempt, but only the user can change that system policy.
+    LaunchedEffect(startupPermissionStage, unusedAppStatusChecked, showLocalNetworkDenied) {
+        if (startupPermissionStage < 3 || unusedAppStatusChecked || showLocalNetworkDenied) return@LaunchedEffect
+        unusedAppStatusChecked = true
+        val future = PackageManagerCompat.getUnusedAppRestrictionsStatus(context)
+        future.addListener({
+            val status = runCatching { future.get() }.getOrNull()
+            showUnusedAppRestrictions = status == UnusedAppRestrictionsConstants.API_30 ||
+                status == UnusedAppRestrictionsConstants.API_30_BACKPORT ||
+                status == UnusedAppRestrictionsConstants.API_31
+        }, ContextCompat.getMainExecutor(context))
     }
 
     // Proximity: publish state and wake on FAR -> NEAR while sleeping/saver.
@@ -268,6 +365,80 @@ fun HomePanelApp(viewModel: MainViewModel) {
                 deepSleep = true
             )
         }
+    }
+
+    if (showLocalNetworkIntro) {
+        AlertDialog(
+            onDismissRequest = { },
+            title = { Text(stringResource(R.string.local_network_permission_title)) },
+            text = { Text(stringResource(R.string.local_network_permission_message)) },
+            confirmButton = {
+                Button(onClick = {
+                    showLocalNetworkIntro = false
+                    localNetworkPermissionLauncher.launch(Manifest.permission.ACCESS_LOCAL_NETWORK)
+                }) { Text(stringResource(R.string.allow)) }
+            },
+            dismissButton = {
+                TextButton(onClick = {
+                    showLocalNetworkIntro = false
+                    showLocalNetworkDenied = true
+                    startupPermissionStage = 1
+                }) { Text(stringResource(R.string.not_now)) }
+            }
+        )
+    }
+
+    if (showLocalNetworkDenied) {
+        AlertDialog(
+            onDismissRequest = { showLocalNetworkDenied = false },
+            title = { Text(stringResource(R.string.local_network_missing_title)) },
+            text = { Text(stringResource(R.string.local_network_missing_message)) },
+            confirmButton = {
+                Button(onClick = {
+                    val intent = Intent(
+                        Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                        Uri.parse("package:${context.packageName}")
+                    )
+                    appDetailsLauncher.launch(intent)
+                }) { Text(stringResource(R.string.open_app_settings)) }
+            },
+            dismissButton = {
+                TextButton(onClick = { showLocalNetworkDenied = false }) {
+                    Text(stringResource(R.string.continue_limited))
+                }
+            }
+        )
+    }
+
+    if (showUnusedAppRestrictions) {
+        AlertDialog(
+            onDismissRequest = { showUnusedAppRestrictions = false },
+            title = { Text(stringResource(R.string.unused_app_title)) },
+            text = { Text(stringResource(R.string.unused_app_message)) },
+            confirmButton = {
+                Button(onClick = {
+                    runCatching {
+                        IntentCompat.createManageUnusedAppRestrictionsIntent(
+                            context,
+                            context.packageName
+                        )
+                    }.onSuccess { intent -> unusedAppRestrictionsLauncher.launch(intent) }
+                        .onFailure {
+                            appDetailsLauncher.launch(
+                                Intent(
+                                    Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                                    Uri.parse("package:${context.packageName}")
+                                )
+                            )
+                        }
+                }) { Text(stringResource(R.string.open_app_settings)) }
+            },
+            dismissButton = {
+                TextButton(onClick = { showUnusedAppRestrictions = false }) {
+                    Text(stringResource(R.string.later))
+                }
+            }
+        )
     }
 
     if (showSettingsPin) {

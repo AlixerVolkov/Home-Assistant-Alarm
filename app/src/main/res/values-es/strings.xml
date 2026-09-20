@@ -159,4 +159,16 @@
     <string name="settings_pin_prompt">Introduce el PIN de kiosk para abrir la configuración de HomePanel.</string>
     <string name="settings_pin_incorrect">PIN incorrecto</string>
     <string name="settings_unlock">Desbloquear</string>
+
+    <string name="allow">Permitir</string>
+    <string name="not_now">Ahora no</string>
+    <string name="local_network_permission_title">Permitir acceso a la red local</string>
+    <string name="local_network_permission_message">HomePanel necesita acceso a la red local para conectarse a Home Assistant, MQTT y al servidor de cámara RTSP. Android 17 exige este permiso de forma explícita.</string>
+    <string name="local_network_missing_title">El acceso a la red local está desactivado</string>
+    <string name="local_network_missing_message">MQTT, Home Assistant en tu LAN y RTSP pueden dar timeout hasta que habilites el acceso a la red local para HomePanel. Abre los ajustes de la aplicación y permite Red local.</string>
+    <string name="open_app_settings">Abrir ajustes de la aplicación</string>
+    <string name="continue_limited">Continuar con acceso limitado</string>
+    <string name="unused_app_title">Mantener HomePanel activo</string>
+    <string name="unused_app_message">Para un panel de pared, desactiva en Android “Pausar actividad si no se usa” / “Administrar app si no se usa”. De lo contrario Android puede revocar permisos o hibernar HomePanel tras un periodo largo de inactividad.</string>
+    <string name="later">Más tarde</string>
 </resources>

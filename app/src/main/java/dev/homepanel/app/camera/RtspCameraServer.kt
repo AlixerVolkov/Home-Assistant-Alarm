@@ -4,6 +4,7 @@ import android.Manifest
 import android.content.Context
 import android.content.pm.PackageManager
 import android.net.ConnectivityManager
+import android.os.Build
 import androidx.core.content.ContextCompat
 import com.pedro.common.ConnectChecker
 import com.pedro.common.VideoCodec
@@ -27,11 +28,32 @@ class RtspCameraServer(private val context: Context) : ConnectChecker {
     fun hasCameraPermission(): Boolean =
         ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED
 
+    fun hasLocalNetworkPermission(): Boolean =
+        Build.VERSION.SDK_INT < 37 ||
+            ContextCompat.checkSelfPermission(
+                context,
+                Manifest.permission.ACCESS_LOCAL_NETWORK
+            ) == PackageManager.PERMISSION_GRANTED
+
     @Synchronized
     fun start(port: Int = DEFAULT_PORT, advertisedHost: String = "") {
         val safePort = port.coerceIn(1024, 65535)
         val normalizedOverride = advertisedHost.trim().removePrefix("rtsp://").substringBefore(':').trim('/')
         advertisedHostOverride = normalizedOverride
+
+        if (!hasLocalNetworkPermission()) {
+            val ipv4 = preferredIpv4Address()
+            _state.value = RtspCameraState(
+                enabled = true,
+                running = false,
+                port = safePort,
+                endpoint = buildEndpoint(safePort),
+                ipv4Address = ipv4?.first,
+                interfaceName = ipv4?.second,
+                errorMessage = "Local network permission is required for the RTSP server"
+            )
+            return
+        }
 
         if (!hasCameraPermission()) {
             _state.value = RtspCameraState(

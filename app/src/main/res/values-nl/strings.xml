@@ -105,4 +105,16 @@
     <string name="settings_pin_prompt">Voer de kiosk-PIN in om HomePanel-instellingen te openen.</string>
     <string name="settings_pin_incorrect">Onjuiste PIN</string>
     <string name="settings_unlock">Ontgrendelen</string>
+
+    <string name="allow">Toestaan</string>
+    <string name="not_now">Niet nu</string>
+    <string name="local_network_permission_title">Toegang tot lokaal netwerk toestaan</string>
+    <string name="local_network_permission_message">HomePanel heeft toegang tot het lokale netwerk nodig voor Home Assistant, MQTT en de RTSP-cameraserver. Android 17 vereist hiervoor expliciete toestemming.</string>
+    <string name="local_network_missing_title">Toegang tot lokaal netwerk is uitgeschakeld</string>
+    <string name="local_network_missing_message">MQTT, Home Assistant op je LAN en RTSP kunnen time-outs geven totdat Lokaal netwerk voor HomePanel is toegestaan. Open de app-instellingen en sta Lokaal netwerk toe.</string>
+    <string name="open_app_settings">App-instellingen openen</string>
+    <string name="continue_limited">Doorgaan met beperkte toegang</string>
+    <string name="unused_app_title">HomePanel actief houden</string>
+    <string name="unused_app_message">Voor een wandpaneel kun je in Android “App-activiteit onderbreken indien ongebruikt” / “App beheren indien niet gebruikt” beter uitschakelen. Anders kan Android machtigingen intrekken of HomePanel na lange inactiviteit in slaapstand zetten.</string>
+    <string name="later">Later</string>
 </resources>

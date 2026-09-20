@@ -100,4 +100,16 @@
     <string name="settings_pin_prompt">Saisissez le PIN kiosque pour ouvrir les paramètres HomePanel.</string>
     <string name="settings_pin_incorrect">PIN incorrect</string>
     <string name="settings_unlock">Déverrouiller</string>
+
+    <string name="allow">Autoriser</string>
+    <string name="not_now">Pas maintenant</string>
+    <string name="local_network_permission_title">Autoriser l’accès au réseau local</string>
+    <string name="local_network_permission_message">HomePanel a besoin d’accéder au réseau local pour se connecter à Home Assistant, MQTT et au serveur de caméra RTSP. Android 17 exige explicitement cette autorisation.</string>
+    <string name="local_network_missing_title">L’accès au réseau local est désactivé</string>
+    <string name="local_network_missing_message">MQTT, Home Assistant sur votre LAN et RTSP peuvent expirer tant que l’accès au réseau local n’est pas autorisé pour HomePanel. Ouvrez les paramètres de l’application et autorisez Réseau local.</string>
+    <string name="open_app_settings">Ouvrir les paramètres</string>
+    <string name="continue_limited">Continuer avec un accès limité</string>
+    <string name="unused_app_title">Maintenir HomePanel actif</string>
+    <string name="unused_app_message">Pour un panneau mural, désactivez dans Android « Mettre l’activité en pause si l’application est inutilisée » / « Gérer l’application si elle n’est pas utilisée ». Sinon Android peut révoquer des autorisations ou mettre HomePanel en veille prolongée après une longue période d’inactivité.</string>
+    <string name="later">Plus tard</string>
 </resources>
