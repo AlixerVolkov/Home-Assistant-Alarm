@@ -206,13 +206,20 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun onLocalNetworkPermissionResult(granted: Boolean) {
-        if (!granted) return
-        _settings.value?.let { current ->
-            connect(current)
-            if (current.rtspEnabled) {
-                rtspCameraServer.stop()
-                rtspCameraServer.start(current.rtspPort)
-            }
+        val current = _settings.value ?: return
+        if (!granted) {
+            // MqttDeviceBridge already exposes a clear permission-required state instead of
+            // attempting a connection that will only end in a timeout.
+            mqttDeviceBridge.applySettings(current)
+            return
+        }
+        // Retry every LAN-dependent service after the Android 17 runtime permission is granted.
+        // v0.5.0 retried Home Assistant/RTSP here but accidentally omitted MQTT.
+        mqttDeviceBridge.applySettings(current)
+        connect(current)
+        if (current.rtspEnabled) {
+            rtspCameraServer.stop()
+            rtspCameraServer.start(current.rtspPort)
         }
     }
 

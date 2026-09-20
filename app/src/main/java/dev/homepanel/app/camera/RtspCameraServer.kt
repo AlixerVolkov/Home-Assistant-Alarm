@@ -11,6 +11,9 @@ import com.pedro.rtspserver.RtspServerCamera2
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import java.net.Inet4Address
+import java.net.NetworkInterface
+import java.util.Collections
 
 /**
  * Small lifecycle wrapper around RootEncoder's RTSP-Server plugin.
@@ -72,7 +75,8 @@ class RtspCameraServer(private val context: Context) : ConnectChecker {
 
             server = cameraServer
             cameraServer.startStream()
-            val endpoint = cameraServer.streamClient.getEndPointConnection()
+            val endpoint = preferredIpv4Endpoint(safePort)
+                ?: cameraServer.streamClient.getEndPointConnection()
             _state.value = RtspCameraState(
                 enabled = true,
                 running = true,
@@ -108,9 +112,39 @@ class RtspCameraServer(private val context: Context) : ConnectChecker {
         val current = server ?: return
         _state.value = _state.value.copy(
             running = current.isStreaming,
-            endpoint = runCatching { current.streamClient.getEndPointConnection() }.getOrNull(),
+            endpoint = preferredIpv4Endpoint(activePort)
+                ?: runCatching { current.streamClient.getEndPointConnection() }.getOrNull(),
             clientCount = runCatching { current.streamClient.getNumClients() }.getOrDefault(0)
         )
+    }
+
+    /**
+     * RootEncoder can report an IPv6 ULA first on dual-stack Wi-Fi networks. The RTSP server
+     * itself listens on the device, so expose an IPv4 LAN address when one exists; this is easier
+     * to consume from Frigate/go2rtc and avoids malformed unbracketed IPv6 RTSP URLs.
+     */
+    private fun preferredIpv4Endpoint(port: Int): String? {
+        val interfaces = runCatching { Collections.list(NetworkInterface.getNetworkInterfaces()) }
+            .getOrNull()
+            .orEmpty()
+            .filter { network ->
+                runCatching { network.isUp && !network.isLoopback }.getOrDefault(false)
+            }
+            .sortedBy { network ->
+                when {
+                    network.name.startsWith("wlan", ignoreCase = true) -> 0
+                    network.name.startsWith("eth", ignoreCase = true) -> 1
+                    else -> 2
+                }
+            }
+
+        val candidates = interfaces.flatMap { network ->
+            runCatching { Collections.list(network.inetAddresses) }.getOrDefault(emptyList())
+        }.filterIsInstance<Inet4Address>()
+            .filter { !it.isLoopbackAddress && !it.isLinkLocalAddress }
+
+        val preferred = candidates.firstOrNull { it.isSiteLocalAddress } ?: candidates.firstOrNull()
+        return preferred?.hostAddress?.let { "rtsp://$it:$port/" }
     }
 
     override fun onConnectionStarted(url: String) = Unit

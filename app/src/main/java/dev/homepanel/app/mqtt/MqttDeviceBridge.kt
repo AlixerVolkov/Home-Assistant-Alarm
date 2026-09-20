@@ -1,10 +1,19 @@
 package dev.homepanel.app.mqtt
 
+import android.Manifest
 import android.content.Context
+import android.content.pm.PackageManager
 import android.os.Build
 import android.provider.Settings
+import androidx.core.content.ContextCompat
 import dev.homepanel.app.BuildConfig
 import dev.homepanel.app.data.PanelSettings
+import java.net.Inet4Address
+import java.net.InetAddress
+import java.net.InetSocketAddress
+import java.net.Socket
+import java.net.SocketTimeoutException
+import java.net.UnknownHostException
 import java.util.Locale
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -28,8 +37,11 @@ data class MqttDeviceState(
     val connected: Boolean = false,
     val brokerUri: String? = null,
     val deviceIdentifier: String? = null,
+    val resolvedAddress: String? = null,
     val errorMessage: String? = null
 )
+
+private const val TCP_PROBE_TIMEOUT_MS = 5_000
 
 private data class MqttConfig(
     val host: String,
@@ -72,12 +84,32 @@ class MqttDeviceBridge(
         }
 
         val config = MqttConfig(
-            host = settings.mqttHost.trim(),
+            host = normalizeHost(settings.mqttHost),
             port = settings.mqttPort.coerceIn(1, 65535),
             username = settings.mqttUsername.trim(),
             password = settings.mqttPassword,
             tls = settings.mqttTls
         )
+
+        // Android 17 blocks direct LAN communication until ACCESS_LOCAL_NETWORK has been
+        // granted. The v0.5.0 implementation could start MQTT before the permission dialog had
+        // completed, then never retry after the user granted it. Avoid the misleading timeout.
+        if (Build.VERSION.SDK_INT >= 37 &&
+            ContextCompat.checkSelfPermission(appContext, Manifest.permission.ACCESS_LOCAL_NETWORK) !=
+            PackageManager.PERMISSION_GRANTED
+        ) {
+            disconnect()
+            activeConfig = config
+            _state.value = MqttDeviceState(
+                enabled = true,
+                connected = false,
+                brokerUri = brokerUri(config, config.host),
+                deviceIdentifier = deviceIdentifier,
+                errorMessage = "Local network permission is required before MQTT can connect"
+            )
+            return
+        }
+
         if (activeConfig == config && client?.isConnected == true) return
 
         scope.launch { connect(config) }
@@ -113,18 +145,35 @@ class MqttDeviceBridge(
     private fun connect(config: MqttConfig) {
         disconnect()
         activeConfig = config
-        val scheme = if (config.tls) "ssl" else "tcp"
-        val brokerUri = "$scheme://${config.host}:${config.port}"
-        _state.value = MqttDeviceState(
-            enabled = true,
-            connected = false,
-            brokerUri = brokerUri,
-            deviceIdentifier = deviceIdentifier
-        )
 
         runCatching {
+            val resolved = resolvePreferredAddress(config.host)
+            // Most Home Assistant/Mosquitto installations are LAN-only. Prefer IPv4 for plain
+            // MQTT because some Android devices resolve the same host to an IPv6 ULA first even
+            // when the broker is only reachable on IPv4. Keep the hostname for TLS so certificate
+            // hostname validation is not broken.
+            val connectionHost = if (!config.tls && resolved is Inet4Address) {
+                resolved.hostAddress ?: config.host
+            } else {
+                config.host
+            }
+            val displayUri = brokerUri(config, connectionHost)
+            val resolvedAddress = resolved?.hostAddress
+
+            _state.value = MqttDeviceState(
+                enabled = true,
+                connected = false,
+                brokerUri = displayUri,
+                deviceIdentifier = deviceIdentifier,
+                resolvedAddress = resolvedAddress
+            )
+
+            // Probe TCP first so a firewall/VLAN/closed-port problem is reported as such rather
+            // than as the generic Paho "timed out waiting for a response" message.
+            probeTcp(resolved ?: InetAddress.getByName(config.host), config.port)
+
             val mqttClient = MqttAsyncClient(
-                brokerUri,
+                displayUri,
                 "homepanel-$shortId",
                 MemoryPersistence()
             )
@@ -141,13 +190,57 @@ class MqttDeviceBridge(
                 setWill(availabilityTopic, "offline".toByteArray(Charsets.UTF_8), 1, true)
             }
             mqttClient.connect(options).waitForCompletion(12_000L)
-            onConnected(mqttClient, brokerUri)
+            onConnected(mqttClient, displayUri)
         }.onFailure { error ->
             _state.value = _state.value.copy(
                 connected = false,
-                errorMessage = error.message ?: "Could not connect to MQTT broker"
+                errorMessage = friendlyConnectionError(config, error)
             )
         }
+    }
+
+    private fun normalizeHost(raw: String): String {
+        var value = raw.trim()
+        listOf("mqtt://", "mqtts://", "tcp://", "ssl://", "http://", "https://").forEach { prefix ->
+            if (value.startsWith(prefix, ignoreCase = true)) value = value.substring(prefix.length)
+        }
+        value = value.substringBefore('/')
+        if (value.startsWith('[') && value.contains(']')) {
+            return value.substringAfter('[').substringBefore(']')
+        }
+        // Strip an accidentally pasted port only for non-IPv6 host strings.
+        if (value.count { it == ':' } == 1) {
+            val maybePort = value.substringAfter(':')
+            if (maybePort.all { it.isDigit() }) value = value.substringBefore(':')
+        }
+        return value
+    }
+
+    private fun resolvePreferredAddress(host: String): InetAddress? {
+        val addresses = InetAddress.getAllByName(host).toList()
+        return addresses.filterIsInstance<Inet4Address>()
+            .firstOrNull { !it.isLoopbackAddress }
+            ?: addresses.firstOrNull { !it.isLoopbackAddress }
+            ?: addresses.firstOrNull()
+    }
+
+    private fun brokerUri(config: MqttConfig, host: String): String {
+        val scheme = if (config.tls) "ssl" else "tcp"
+        val formattedHost = if (host.contains(':') && !host.startsWith('[')) "[$host]" else host
+        return "$scheme://$formattedHost:${config.port}"
+    }
+
+    private fun probeTcp(address: InetAddress, port: Int) {
+        Socket().use { socket ->
+            socket.connect(InetSocketAddress(address, port), TCP_PROBE_TIMEOUT_MS)
+        }
+    }
+
+    private fun friendlyConnectionError(config: MqttConfig, error: Throwable): String = when (error) {
+        is UnknownHostException -> "MQTT host could not be resolved: ${config.host}"
+        is SocketTimeoutException -> "TCP timeout to ${config.host}:${config.port}. Check broker port, VLAN/firewall and TLS setting."
+        is SecurityException -> "Android blocked local-network access. Grant the Local network permission to HomePanel."
+        else -> error.message ?: "Could not connect to MQTT broker ${config.host}:${config.port}"
     }
 
     private fun onConnected(mqttClient: MqttAsyncClient, brokerUri: String?) {

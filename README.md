@@ -1,6 +1,15 @@
-# HomePanel v0.5.0
+# HomePanel v0.5.1
 
 Panel Android moderno para Home Assistant / Alarmo, pensado para tablets de pared.
+
+## Correcciones v0.5.1
+
+- MQTT espera el permiso de red local de Android 17 antes de conectar.
+- MQTT se reintenta automaticamente al conceder el permiso.
+- MQTT sin TLS prefiere IPv4 cuando el broker resuelve a IPv4 e IPv6.
+- Se hace una prueba TCP previa para distinguir puerto/firewall/VLAN de errores MQTT.
+- La URL RTSP mostrada prefiere la IPv4 LAN de la tablet para Frigate/go2rtc.
+
 
 ## Novedades v0.5.0
 
@@ -51,7 +60,7 @@ HomePanel publica discovery retenido y disponibilidad (`online/offline`). Home A
 ```text
 applicationId = dev.homepanel.app
 versionCode = 9
-versionName = 0.5.0
+versionName = 0.5.1
 ```
 
 El APK release se firma con los mismos GitHub Actions secrets de las versiones anteriores. Puede instalarse encima de la v0.4.x/v0.3.1 firmada con la misma clave.
@@ -59,6 +68,6 @@ El APK release se firma con los mismos GitHub Actions secrets de las versiones a
 Artefacto esperado:
 
 ```text
-HomePanel-v0.5.0-signed-apk
-└── HomePanel-v0.5.0.apk
+HomePanel-v0.5.1-signed-apk
+└── HomePanel-v0.5.1.apk
 ```
