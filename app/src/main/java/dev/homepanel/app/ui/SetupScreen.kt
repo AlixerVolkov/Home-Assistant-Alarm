@@ -21,8 +21,10 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.RadioButton
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -43,7 +45,7 @@ fun SetupScreen(
     discoveryState: DiscoveryState,
     canCancel: Boolean,
     onDiscover: (String, String) -> Unit,
-    onSave: (String, String, String, String?, Int, Int) -> Unit,
+    onSave: (PanelSettings) -> Unit,
     onCancel: () -> Unit,
     onClear: () -> Unit
 ) {
@@ -64,6 +66,33 @@ fun SetupScreen(
     }
     var sleepMinutes by rememberSaveable(initialSettings?.sleepTimeoutMinutes) {
         mutableStateOf((initialSettings?.sleepTimeoutMinutes ?: 10).toString())
+    }
+    var proximityWakeEnabled by rememberSaveable(initialSettings?.proximityWakeEnabled) {
+        mutableStateOf(initialSettings?.proximityWakeEnabled ?: true)
+    }
+    var rtspEnabled by rememberSaveable(initialSettings?.rtspEnabled) {
+        mutableStateOf(initialSettings?.rtspEnabled ?: false)
+    }
+    var rtspPort by rememberSaveable(initialSettings?.rtspPort) {
+        mutableStateOf((initialSettings?.rtspPort ?: 8554).toString())
+    }
+    var guestVoucherSensor by rememberSaveable(initialSettings?.guestVoucherSensorEntityId) {
+        mutableStateOf(initialSettings?.guestVoucherSensorEntityId.orEmpty())
+    }
+    var guestCreateButton by rememberSaveable(initialSettings?.guestCreateButtonEntityId) {
+        mutableStateOf(initialSettings?.guestCreateButtonEntityId.orEmpty())
+    }
+    var guestQrImage by rememberSaveable(initialSettings?.guestQrImageEntityId) {
+        mutableStateOf(initialSettings?.guestQrImageEntityId.orEmpty())
+    }
+
+    LaunchedEffect(discoveryState.guestWifi) {
+        if (guestVoucherSensor.isBlank() && discoveryState.guestWifi.size == 1) {
+            val guest = discoveryState.guestWifi.single()
+            guestVoucherSensor = guest.voucherSensorEntityId
+            guestCreateButton = guest.createButtonEntityId
+            guestQrImage = guest.qrImageEntityId.orEmpty()
+        }
     }
 
     BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
@@ -133,11 +162,8 @@ fun SetupScreen(
                     enabled = !discoveryState.isLoading && baseUrl.isNotBlank() && token.isNotBlank()
                 ) {
                     Text(
-                        if (discoveryState.isLoading) {
-                            stringResource(R.string.discovering)
-                        } else {
-                            stringResource(R.string.discover_alarms)
-                        }
+                        if (discoveryState.isLoading) stringResource(R.string.discovering)
+                        else stringResource(R.string.discover_alarms)
                     )
                 }
 
@@ -188,11 +214,96 @@ fun SetupScreen(
 
                 HorizontalDivider()
 
+                Text(stringResource(R.string.guest_wifi_setup_title), style = MaterialTheme.typography.titleMedium)
+                Text(
+                    stringResource(R.string.guest_wifi_setup_subtitle),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable {
+                            guestVoucherSensor = ""
+                            guestCreateButton = ""
+                            guestQrImage = ""
+                        }
+                ) {
+                    Row(
+                        modifier = Modifier.padding(12.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        RadioButton(
+                            selected = guestVoucherSensor.isBlank(),
+                            onClick = {
+                                guestVoucherSensor = ""
+                                guestCreateButton = ""
+                                guestQrImage = ""
+                            }
+                        )
+                        Text(stringResource(R.string.guest_wifi_none))
+                    }
+                }
+
+                discoveryState.guestWifi.forEach { guest ->
+                    Card(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable {
+                                guestVoucherSensor = guest.voucherSensorEntityId
+                                guestCreateButton = guest.createButtonEntityId
+                                guestQrImage = guest.qrImageEntityId.orEmpty()
+                            }
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(12.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
+                            RadioButton(
+                                selected = guestVoucherSensor == guest.voucherSensorEntityId,
+                                onClick = {
+                                    guestVoucherSensor = guest.voucherSensorEntityId
+                                    guestCreateButton = guest.createButtonEntityId
+                                    guestQrImage = guest.qrImageEntityId.orEmpty()
+                                }
+                            )
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text("📶 ${guest.displayName}", style = MaterialTheme.typography.titleSmall)
+                                Text(guest.voucherSensorEntityId, style = MaterialTheme.typography.bodySmall)
+                                Text(
+                                    stringResource(R.string.guest_wifi_qr_hint, guest.qrImageEntityId.orEmpty()),
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
+                    }
+                }
+
+                if (discoveryState.hasRun && discoveryState.guestWifi.isEmpty()) {
+                    Text(
+                        stringResource(R.string.guest_wifi_not_found),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+
+                HorizontalDivider()
+
                 Text(stringResource(R.string.wake_title), style = MaterialTheme.typography.titleMedium)
                 Text(
                     stringResource(R.string.wake_subtitle),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+
+                SettingsSwitchRow(
+                    title = stringResource(R.string.proximity_wake_title),
+                    subtitle = stringResource(R.string.proximity_wake_subtitle),
+                    checked = proximityWakeEnabled,
+                    onCheckedChange = { proximityWakeEnabled = it }
                 )
 
                 Card(
@@ -246,6 +357,32 @@ fun SetupScreen(
 
                 HorizontalDivider()
 
+                Text(stringResource(R.string.rtsp_title), style = MaterialTheme.typography.titleMedium)
+                Text(
+                    stringResource(R.string.rtsp_subtitle),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                SettingsSwitchRow(
+                    title = stringResource(R.string.rtsp_enable),
+                    subtitle = stringResource(R.string.rtsp_privacy_hint),
+                    checked = rtspEnabled,
+                    onCheckedChange = { rtspEnabled = it }
+                )
+                if (rtspEnabled) {
+                    OutlinedTextField(
+                        value = rtspPort,
+                        onValueChange = { rtspPort = it.filter(Char::isDigit).take(5) },
+                        modifier = Modifier.fillMaxWidth(),
+                        label = { Text(stringResource(R.string.rtsp_port)) },
+                        supportingText = { Text(stringResource(R.string.rtsp_port_hint)) },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        singleLine = true
+                    )
+                }
+
+                HorizontalDivider()
+
                 Text(stringResource(R.string.display_title), style = MaterialTheme.typography.titleMedium)
                 Text(
                     stringResource(R.string.display_subtitle),
@@ -255,48 +392,20 @@ fun SetupScreen(
 
                 if (compactDisplaySettings) {
                     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                        OutlinedTextField(
-                            value = saverMinutes,
-                            onValueChange = { saverMinutes = it.filter(Char::isDigit).take(3) },
-                            modifier = Modifier.fillMaxWidth(),
-                            label = { Text(stringResource(R.string.screensaver_minutes)) },
-                            supportingText = { Text(stringResource(R.string.zero_disables)) },
-                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                            singleLine = true
-                        )
-                        OutlinedTextField(
-                            value = sleepMinutes,
-                            onValueChange = { sleepMinutes = it.filter(Char::isDigit).take(3) },
-                            modifier = Modifier.fillMaxWidth(),
-                            label = { Text(stringResource(R.string.sleep_minutes)) },
-                            supportingText = { Text(stringResource(R.string.zero_disables)) },
-                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                            singleLine = true
-                        )
+                        TimeoutField(saverMinutes, { saverMinutes = it }, R.string.screensaver_minutes)
+                        TimeoutField(sleepMinutes, { sleepMinutes = it }, R.string.sleep_minutes)
                     }
                 } else {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
-                        OutlinedTextField(
-                            value = saverMinutes,
-                            onValueChange = { saverMinutes = it.filter(Char::isDigit).take(3) },
-                            modifier = Modifier.weight(1f),
-                            label = { Text(stringResource(R.string.screensaver_minutes)) },
-                            supportingText = { Text(stringResource(R.string.zero_disables)) },
-                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                            singleLine = true
-                        )
-                        OutlinedTextField(
-                            value = sleepMinutes,
-                            onValueChange = { sleepMinutes = it.filter(Char::isDigit).take(3) },
-                            modifier = Modifier.weight(1f),
-                            label = { Text(stringResource(R.string.sleep_minutes)) },
-                            supportingText = { Text(stringResource(R.string.zero_disables)) },
-                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                            singleLine = true
-                        )
+                        Column(modifier = Modifier.weight(1f)) {
+                            TimeoutField(saverMinutes, { saverMinutes = it }, R.string.screensaver_minutes)
+                        }
+                        Column(modifier = Modifier.weight(1f)) {
+                            TimeoutField(sleepMinutes, { sleepMinutes = it }, R.string.sleep_minutes)
+                        }
                     }
                 }
 
@@ -313,12 +422,20 @@ fun SetupScreen(
                     Button(
                         onClick = {
                             onSave(
-                                baseUrl,
-                                token,
-                                entityId,
-                                wakeEntityId.takeIf { it.isNotBlank() },
-                                saverMinutes.toIntOrNull() ?: 0,
-                                sleepMinutes.toIntOrNull() ?: 0
+                                PanelSettings(
+                                    baseUrl = baseUrl,
+                                    accessToken = token,
+                                    alarmEntityId = entityId,
+                                    wakeEntityId = wakeEntityId.takeIf { it.isNotBlank() },
+                                    screensaverTimeoutMinutes = saverMinutes.toIntOrNull() ?: 0,
+                                    sleepTimeoutMinutes = sleepMinutes.toIntOrNull() ?: 0,
+                                    proximityWakeEnabled = proximityWakeEnabled,
+                                    rtspEnabled = rtspEnabled,
+                                    rtspPort = rtspPort.toIntOrNull() ?: 8554,
+                                    guestVoucherSensorEntityId = guestVoucherSensor.takeIf { it.isNotBlank() },
+                                    guestCreateButtonEntityId = guestCreateButton.takeIf { it.isNotBlank() },
+                                    guestQrImageEntityId = guestQrImage.takeIf { it.isNotBlank() }
+                                )
                             )
                         },
                         enabled = baseUrl.isNotBlank() && token.isNotBlank() && entityId.isNotBlank(),
@@ -344,4 +461,43 @@ fun SetupScreen(
             }
         }
     }
+}
+
+@Composable
+private fun SettingsSwitchRow(
+    title: String,
+    subtitle: String,
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit
+) {
+    Card(modifier = Modifier.fillMaxWidth()) {
+        Row(
+            modifier = Modifier.padding(14.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(title, style = MaterialTheme.typography.titleSmall)
+                Text(
+                    subtitle,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            Switch(checked = checked, onCheckedChange = onCheckedChange)
+        }
+    }
+}
+
+@Composable
+private fun TimeoutField(value: String, onValueChange: (String) -> Unit, labelRes: Int) {
+    OutlinedTextField(
+        value = value,
+        onValueChange = { onValueChange(it.filter(Char::isDigit).take(3)) },
+        modifier = Modifier.fillMaxWidth(),
+        label = { Text(stringResource(labelRes)) },
+        supportingText = { Text(stringResource(R.string.zero_disables)) },
+        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+        singleLine = true
+    )
 }

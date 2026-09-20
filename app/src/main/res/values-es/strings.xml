@@ -69,4 +69,35 @@
     <string name="zero_disables">0 = desactivado</string>
     <string name="sleep_explanation">El reposo mantiene HomePanel conectado para despertar de forma fiable con movimiento o eventos de Alarmo. Una alarma activada o en cuenta atrás también despierta el panel.</string>
     <string name="tap_to_wake">Toca para despertar</string>
+
+    <string name="guest_wifi_setup_title">Vales Wi-Fi para visitas</string>
+    <string name="guest_wifi_setup_subtitle">HomePanel puede detectar UniFi Hotspot Manager y ofrecer a las visitas un botón para crear un vale y mostrar su código y QR.</string>
+    <string name="guest_wifi_none">Botón Wi-Fi de visitas desactivado</string>
+    <string name="guest_wifi_qr_hint">Entidad QR: %1$s (actívala en Home Assistant si está deshabilitada)</string>
+    <string name="guest_wifi_not_found">No se detectaron entidades de vales de UniFi Hotspot Manager. Ejecuta la detección después de configurar la integración en Home Assistant.</string>
+    <string name="proximity_wake_title">Usar sensor de proximidad de la tablet</string>
+    <string name="proximity_wake_subtitle">Salir del salvapantallas/reposo cuando una mano o persona se acerque a una tablet con sensor de proximidad.</string>
+    <string name="rtsp_title">Cámara frontal RTSP</string>
+    <string name="rtsp_subtitle">Publica la cámara frontal de la tablet como un stream RTSP local, solo vídeo.</string>
+    <string name="rtsp_enable">Activar servidor de cámara RTSP</string>
+    <string name="rtsp_privacy_hint">El permiso de cámara solo se pide al activarlo. No se transmite micrófono ni audio.</string>
+    <string name="rtsp_port">Puerto RTSP</string>
+    <string name="rtsp_port_hint">Predeterminado: 8554. Abre la dirección rtsp:// mostrada desde otro equipo de la misma red.</string>
+    <string name="rtsp_permission_needed">Se necesita permiso de cámara</string>
+    <string name="rtsp_running">Cámara RTSP activa</string>
+    <string name="rtsp_starting">Iniciando cámara RTSP…</string>
+    <string name="rtsp_clients">%1$d cliente(s)</string>
+    <string name="guest_wifi_title">Wi-Fi para visitas</string>
+    <string name="guest_wifi_creating">Creando vale…</string>
+    <string name="guest_wifi_voucher_ready">Vale listo · toca para mostrarlo</string>
+    <string name="guest_wifi_tap">Toca para acceso de visitas</string>
+    <string name="guest_wifi_code">Código del vale</string>
+    <string name="guest_wifi_no_voucher">Crea un vale para dar acceso Wi-Fi temporal a una visita.</string>
+    <string name="guest_wifi_qr">Código QR del Wi-Fi de visitas</string>
+    <string name="guest_wifi_qr_unavailable">Código QR no disponible.</string>
+    <string name="guest_wifi_enable_qr_entity">Si es necesario, activa %1$s en Home Assistant → Ajustes → Dispositivos y servicios → Entidades.</string>
+    <string name="guest_wifi_duration">Duración: %1$s</string>
+    <string name="guest_wifi_status">Estado: %1$s</string>
+    <string name="guest_wifi_create">Crear nuevo vale</string>
+    <string name="close">Cerrar</string>
 </resources>

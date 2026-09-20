@@ -1,5 +1,7 @@
 package dev.homepanel.app.ui
 
+import android.graphics.BitmapFactory
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -14,6 +16,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.sizeIn
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
@@ -38,6 +41,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -45,8 +49,10 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import dev.homepanel.app.GuestWifiUiState
 import dev.homepanel.app.R
 import dev.homepanel.app.WeatherUiState
+import dev.homepanel.app.camera.RtspCameraState
 import dev.homepanel.app.data.PanelSettings
 import dev.homepanel.app.network.AlarmAction
 import dev.homepanel.app.network.AlarmEntityState
@@ -54,6 +60,7 @@ import dev.homepanel.app.network.AlarmFeatures
 import dev.homepanel.app.network.ConnectionStatus
 import dev.homepanel.app.network.DailyForecast
 import dev.homepanel.app.network.HomeAssistantConnectionState
+import dev.homepanel.app.network.GuestVoucherState
 import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.ZoneId
@@ -67,13 +74,22 @@ fun AlarmScreen(
     settings: PanelSettings,
     connectionState: HomeAssistantConnectionState,
     weatherState: WeatherUiState,
+    guestWifiState: GuestWifiUiState,
+    rtspCameraState: RtspCameraState,
     onAction: (AlarmAction, String?) -> Unit,
+    onCreateGuestVoucher: () -> Unit,
+    onRefreshGuestQr: () -> Unit,
     onReconnect: () -> Unit,
     onRefreshWeather: () -> Unit,
     onSettings: () -> Unit
 ) {
     val alarm = connectionState.alarm
     var pinAction by remember { mutableStateOf<AlarmAction?>(null) }
+    var showGuestWifi by remember { mutableStateOf(false) }
+
+    LaunchedEffect(showGuestWifi) {
+        if (showGuestWifi) onRefreshGuestQr()
+    }
 
     BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
         val compact = maxWidth < 720.dp || maxHeight < 520.dp
@@ -93,11 +109,19 @@ fun AlarmScreen(
                     connectionState = connectionState,
                     weatherState = weatherState,
                     compact = true,
+                    rtspCameraState = rtspCameraState,
                     onReconnect = onReconnect,
                     onRefreshWeather = onRefreshWeather,
                     onSettings = onSettings
                 )
                 ErrorBlock(connectionState)
+                if (!settings.guestVoucherSensorEntityId.isNullOrBlank()) {
+                    GuestWifiEntryCard(
+                        voucher = connectionState.guestVoucher,
+                        pending = connectionState.pendingGuestVoucher,
+                        onClick = { showGuestWifi = true }
+                    )
+                }
                 AlarmStateCard(alarm = alarm, modifier = Modifier.fillMaxWidth())
                 AlarmActionsPanel(
                     alarm = alarm,
@@ -123,11 +147,19 @@ fun AlarmScreen(
                     connectionState = connectionState,
                     weatherState = weatherState,
                     compact = false,
+                    rtspCameraState = rtspCameraState,
                     onReconnect = onReconnect,
                     onRefreshWeather = onRefreshWeather,
                     onSettings = onSettings
                 )
                 ErrorBlock(connectionState)
+                if (!settings.guestVoucherSensorEntityId.isNullOrBlank()) {
+                    GuestWifiEntryCard(
+                        voucher = connectionState.guestVoucher,
+                        pending = connectionState.pendingGuestVoucher,
+                        onClick = { showGuestWifi = true }
+                    )
+                }
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -157,6 +189,19 @@ fun AlarmScreen(
         }
     }
 
+    if (showGuestWifi) {
+        GuestWifiDialog(
+            voucher = connectionState.guestVoucher,
+            guestWifiState = guestWifiState,
+            pending = connectionState.pendingGuestVoucher,
+            errorMessage = connectionState.guestErrorMessage,
+            qrEntityId = settings.guestQrImageEntityId,
+            onCreate = onCreateGuestVoucher,
+            onRefreshQr = onRefreshGuestQr,
+            onDismiss = { showGuestWifi = false }
+        )
+    }
+
     pinAction?.let { action ->
         PinDialog(
             action = action,
@@ -183,6 +228,7 @@ private fun DashboardHeader(
     connectionState: HomeAssistantConnectionState,
     weatherState: WeatherUiState,
     compact: Boolean,
+    rtspCameraState: RtspCameraState,
     onReconnect: () -> Unit,
     onRefreshWeather: () -> Unit,
     onSettings: () -> Unit
@@ -212,6 +258,9 @@ private fun DashboardHeader(
                 modifier = Modifier.fillMaxWidth(),
                 onRefresh = onRefreshWeather
             )
+            if (rtspCameraState.enabled) {
+                RtspStatusChip(rtspCameraState, modifier = Modifier.fillMaxWidth())
+            }
         }
     } else {
         Row(
@@ -234,6 +283,9 @@ private fun DashboardHeader(
                 modifier = Modifier.weight(1.25f),
                 onRefresh = onRefreshWeather
             )
+            if (rtspCameraState.enabled) {
+                RtspStatusChip(rtspCameraState, modifier = Modifier.weight(0.95f))
+            }
             IconButton(onClick = onSettings) {
                 Text("⚙️", style = MaterialTheme.typography.headlineMedium)
             }
@@ -258,6 +310,176 @@ private fun ConnectionChip(status: ConnectionStatus, onReconnect: () -> Unit) {
             Text(connectionStatusLabel(status), style = MaterialTheme.typography.labelMedium)
         }
     }
+}
+
+@Composable
+private fun RtspStatusChip(state: RtspCameraState, modifier: Modifier = Modifier) {
+    val label = when {
+        state.permissionRequired -> stringResource(R.string.rtsp_permission_needed)
+        state.running -> state.endpoint ?: stringResource(R.string.rtsp_running)
+        !state.errorMessage.isNullOrBlank() -> state.errorMessage
+        else -> stringResource(R.string.rtsp_starting)
+    }
+    Surface(
+        modifier = modifier,
+        shape = MaterialTheme.shapes.large,
+        color = if (state.running) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.surfaceVariant
+    ) {
+        Column(modifier = Modifier.padding(horizontal = 10.dp, vertical = 7.dp)) {
+            Text("📷 RTSP", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold)
+            Text(label.orEmpty(), style = MaterialTheme.typography.labelSmall, maxLines = 2)
+            if (state.running) {
+                Text(
+                    stringResource(R.string.rtsp_clients, state.clientCount),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun GuestWifiEntryCard(
+    voucher: GuestVoucherState?,
+    pending: Boolean,
+    onClick: () -> Unit
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        onClick = onClick
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 14.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Text("📶", style = MaterialTheme.typography.headlineMedium)
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    stringResource(R.string.guest_wifi_title),
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold
+                )
+                val detail = when {
+                    pending -> stringResource(R.string.guest_wifi_creating)
+                    !voucher?.wlanName.isNullOrBlank() -> voucher?.wlanName.orEmpty()
+                    !voucher?.code.isNullOrBlank() -> stringResource(R.string.guest_wifi_voucher_ready)
+                    else -> stringResource(R.string.guest_wifi_tap)
+                }
+                Text(detail, style = MaterialTheme.typography.bodySmall)
+            }
+            Text("›", style = MaterialTheme.typography.headlineMedium)
+        }
+    }
+}
+
+@Composable
+private fun GuestWifiDialog(
+    voucher: GuestVoucherState?,
+    guestWifiState: GuestWifiUiState,
+    pending: Boolean,
+    errorMessage: String?,
+    qrEntityId: String?,
+    onCreate: () -> Unit,
+    onRefreshQr: () -> Unit,
+    onDismiss: () -> Unit
+) {
+    val qrBitmap = remember(guestWifiState.qrImageBytes) {
+        guestWifiState.qrImageBytes?.let { bytes ->
+            runCatching { BitmapFactory.decodeByteArray(bytes, 0, bytes.size)?.asImageBitmap() }.getOrNull()
+        }
+    }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("📶 ${stringResource(R.string.guest_wifi_title)}") },
+        text = {
+            Column(
+                modifier = Modifier.verticalScroll(rememberScrollState()),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                voucher?.wlanName?.takeIf { it.isNotBlank() }?.let {
+                    Text(it, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                }
+
+                if (!voucher?.code.isNullOrBlank()) {
+                    Surface(
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = MaterialTheme.shapes.large,
+                        color = MaterialTheme.colorScheme.primaryContainer
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(16.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            Text(stringResource(R.string.guest_wifi_code), style = MaterialTheme.typography.labelLarge)
+                            Text(
+                                voucher?.code.orEmpty(),
+                                style = MaterialTheme.typography.headlineMedium,
+                                fontWeight = FontWeight.Bold,
+                                textAlign = TextAlign.Center
+                            )
+                        }
+                    }
+                } else {
+                    Text(stringResource(R.string.guest_wifi_no_voucher), textAlign = TextAlign.Center)
+                }
+
+                when {
+                    guestWifiState.isLoadingQr -> CircularProgressIndicator(modifier = Modifier.size(36.dp))
+                    qrBitmap != null -> Image(
+                        bitmap = qrBitmap,
+                        contentDescription = stringResource(R.string.guest_wifi_qr),
+                        modifier = Modifier.sizeIn(maxWidth = 280.dp, maxHeight = 280.dp)
+                    )
+                    else -> {
+                        Text(
+                            guestWifiState.errorMessage ?: stringResource(R.string.guest_wifi_qr_unavailable),
+                            textAlign = TextAlign.Center,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        if (!qrEntityId.isNullOrBlank()) {
+                            Text(
+                                stringResource(R.string.guest_wifi_enable_qr_entity, qrEntityId),
+                                style = MaterialTheme.typography.labelSmall,
+                                textAlign = TextAlign.Center,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        TextButton(onClick = onRefreshQr) {
+                            Text(stringResource(R.string.retry))
+                        }
+                    }
+                }
+
+                voucher?.duration?.let {
+                    Text(stringResource(R.string.guest_wifi_duration, it), style = MaterialTheme.typography.bodySmall)
+                }
+                voucher?.status?.let {
+                    Text(stringResource(R.string.guest_wifi_status, it), style = MaterialTheme.typography.bodySmall)
+                }
+                if (!errorMessage.isNullOrBlank()) {
+                    Text(errorMessage, color = MaterialTheme.colorScheme.error, textAlign = TextAlign.Center)
+                }
+            }
+        },
+        confirmButton = {
+            Button(onClick = onCreate, enabled = !pending) {
+                if (pending) {
+                    CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
+                    Spacer(Modifier.width(8.dp))
+                }
+                Text(if (pending) stringResource(R.string.guest_wifi_creating) else stringResource(R.string.guest_wifi_create))
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text(stringResource(R.string.close)) }
+        }
+    )
 }
 
 @Composable

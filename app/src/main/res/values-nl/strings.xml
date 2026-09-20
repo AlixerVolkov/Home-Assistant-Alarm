@@ -15,4 +15,35 @@
     <string name="weather_loading">Weer laden…</string><string name="weather_unavailable">Weer niet beschikbaar</string><string name="weather_auto_location">Automatische locatie</string><string name="weather_refresh">Weer vernieuwen</string><string name="weather_feels_wind">Gevoel %1$d°C · wind %2$d km/u</string><string name="weather_clear">Helder</string><string name="weather_partly_cloudy">Halfbewolkt</string><string name="weather_cloudy">Bewolkt</string><string name="weather_rain">Regen</string><string name="weather_snow">Sneeuw</string><string name="weather_storm">Onweer</string><string name="weather_source">Weer: Open-Meteo</string>
     <string name="wake_title">Wakker worden bij detectie</string><string name="wake_subtitle">Kies een bewegings-, bezettings- of aanwezigheidssensor van Home Assistant. De nabijheidssensor van de tablet wordt ook gebruikt indien aanwezig.</string><string name="wake_none">Geen Home Assistant-weksensor</string><string name="wake_entity_manual">Weksensor-entiteit (optioneel)</string>
     <string name="display_title">Screensaver en slaapstand</string><string name="display_subtitle">Stel de inactiviteitstijden in. De screensaver toont klok, weer en alarmstatus; de slaapstand dimt bijna volledig maar blijft verbonden.</string><string name="screensaver_minutes">Screensaver na (min)</string><string name="sleep_minutes">Slaapstand na (min)</string><string name="zero_disables">0 = uitgeschakeld</string><string name="sleep_explanation">De slaapstand blijft verbonden zodat beweging of Alarmo-gebeurtenissen het paneel betrouwbaar kunnen wekken. Een actief of wachtend alarm wekt het paneel ook.</string><string name="tap_to_wake">Tik om te wekken</string>
+
+    <string name="guest_wifi_setup_title">Gast-Wi-Fi vouchers</string>
+    <string name="guest_wifi_setup_subtitle">HomePanel kan UniFi Hotspot Manager detecteren en bezoekers een knop geven om een voucher te maken en de code en QR te tonen.</string>
+    <string name="guest_wifi_none">Gast-Wi-Fi knop uitgeschakeld</string>
+    <string name="guest_wifi_qr_hint">QR-entiteit: %1$s (schakel deze in Home Assistant in als hij uitgeschakeld is)</string>
+    <string name="guest_wifi_not_found">Geen voucher-entiteiten van UniFi Hotspot Manager gevonden. Voer detectie opnieuw uit nadat de integratie in Home Assistant is ingesteld.</string>
+    <string name="proximity_wake_title">Nabijheidssensor van tablet gebruiken</string>
+    <string name="proximity_wake_subtitle">Word wakker uit screensaver/slaapstand wanneer een hand of persoon een tablet met nabijheidssensor nadert.</string>
+    <string name="rtsp_title">RTSP-camera voorzijde</string>
+    <string name="rtsp_subtitle">Stel de frontcamera van de tablet beschikbaar als lokale RTSP-stream met alleen video.</string>
+    <string name="rtsp_enable">RTSP-cameraserver inschakelen</string>
+    <string name="rtsp_privacy_hint">Cameratoestemming wordt alleen gevraagd wanneer dit is ingeschakeld. Microfoon/audio wordt niet gestreamd.</string>
+    <string name="rtsp_port">RTSP-poort</string>
+    <string name="rtsp_port_hint">Standaard: 8554. Open het getoonde rtsp://-adres vanaf een ander apparaat op hetzelfde netwerk.</string>
+    <string name="rtsp_permission_needed">Cameratoestemming vereist</string>
+    <string name="rtsp_running">RTSP-camera actief</string>
+    <string name="rtsp_starting">RTSP-camera starten…</string>
+    <string name="rtsp_clients">%1$d client(s)</string>
+    <string name="guest_wifi_title">Gast-Wi-Fi</string>
+    <string name="guest_wifi_creating">Voucher maken…</string>
+    <string name="guest_wifi_voucher_ready">Voucher klaar · tik om te tonen</string>
+    <string name="guest_wifi_tap">Tik voor bezoekerstoegang</string>
+    <string name="guest_wifi_code">Vouchercode</string>
+    <string name="guest_wifi_no_voucher">Maak een voucher voor tijdelijke Wi-Fi-toegang voor een bezoeker.</string>
+    <string name="guest_wifi_qr">QR-code gast-Wi-Fi</string>
+    <string name="guest_wifi_qr_unavailable">QR-code niet beschikbaar.</string>
+    <string name="guest_wifi_enable_qr_entity">Schakel indien nodig %1$s in via Home Assistant → Instellingen → Apparaten &amp; diensten → Entiteiten.</string>
+    <string name="guest_wifi_duration">Duur: %1$s</string>
+    <string name="guest_wifi_status">Status: %1$s</string>
+    <string name="guest_wifi_create">Nieuwe voucher maken</string>
+    <string name="close">Sluiten</string>
 </resources>

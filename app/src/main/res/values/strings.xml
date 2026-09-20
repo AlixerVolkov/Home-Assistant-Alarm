@@ -69,4 +69,35 @@
     <string name="zero_disables">0 = disabled</string>
     <string name="sleep_explanation">Sleep stays connected so motion or Alarmo events can wake the panel reliably. A triggered or pending alarm also wakes it automatically.</string>
     <string name="tap_to_wake">Touch to wake</string>
+
+    <string name="guest_wifi_setup_title">Guest Wi-Fi vouchers</string>
+    <string name="guest_wifi_setup_subtitle">HomePanel can detect UniFi Hotspot Manager and give visitors a button to create a voucher, then show its code and QR.</string>
+    <string name="guest_wifi_none">Guest Wi-Fi button disabled</string>
+    <string name="guest_wifi_qr_hint">QR entity: %1$s (enable it in Home Assistant if it is disabled)</string>
+    <string name="guest_wifi_not_found">No UniFi Hotspot Manager voucher entities were detected. Run discovery after configuring the integration in Home Assistant.</string>
+    <string name="proximity_wake_title">Use tablet proximity sensor</string>
+    <string name="proximity_wake_subtitle">Wake from the screen saver/sleep when a hand or person approaches a tablet that has a proximity sensor.</string>
+    <string name="rtsp_title">Front camera RTSP</string>
+    <string name="rtsp_subtitle">Expose the tablet front camera as a local, video-only RTSP stream.</string>
+    <string name="rtsp_enable">Enable RTSP camera server</string>
+    <string name="rtsp_privacy_hint">Camera permission is requested only when enabled. No microphone/audio is streamed.</string>
+    <string name="rtsp_port">RTSP port</string>
+    <string name="rtsp_port_hint">Default: 8554. Open the shown rtsp:// address from another device on the same network.</string>
+    <string name="rtsp_permission_needed">Camera permission required</string>
+    <string name="rtsp_running">RTSP camera running</string>
+    <string name="rtsp_starting">Starting RTSP camera…</string>
+    <string name="rtsp_clients">%1$d client(s)</string>
+    <string name="guest_wifi_title">Guest Wi-Fi</string>
+    <string name="guest_wifi_creating">Creating voucher…</string>
+    <string name="guest_wifi_voucher_ready">Voucher ready · tap to show</string>
+    <string name="guest_wifi_tap">Tap for visitor access</string>
+    <string name="guest_wifi_code">Voucher code</string>
+    <string name="guest_wifi_no_voucher">Create a voucher to give a visitor temporary Wi-Fi access.</string>
+    <string name="guest_wifi_qr">Guest Wi-Fi QR code</string>
+    <string name="guest_wifi_qr_unavailable">QR code not available.</string>
+    <string name="guest_wifi_enable_qr_entity">If needed, enable %1$s in Home Assistant → Settings → Devices &amp; services → Entities.</string>
+    <string name="guest_wifi_duration">Duration: %1$s</string>
+    <string name="guest_wifi_status">Status: %1$s</string>
+    <string name="guest_wifi_create">Create new voucher</string>
+    <string name="close">Close</string>
 </resources>

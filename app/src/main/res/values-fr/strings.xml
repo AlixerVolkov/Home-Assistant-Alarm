@@ -10,4 +10,35 @@
     <string name="weather_loading">Chargement de la météo…</string><string name="weather_unavailable">Météo indisponible</string><string name="weather_auto_location">Localisation automatique</string><string name="weather_refresh">Actualiser la météo</string><string name="weather_feels_wind">Ressenti %1$d°C · vent %2$d km/h</string><string name="weather_clear">Dégagé</string><string name="weather_partly_cloudy">Partiellement nuageux</string><string name="weather_cloudy">Nuageux</string><string name="weather_rain">Pluie</string><string name="weather_snow">Neige</string><string name="weather_storm">Orage</string><string name="weather_source">Météo : Open-Meteo</string>
     <string name="wake_title">Réveil sur détection</string><string name="wake_subtitle">Choisissez un capteur de mouvement, d’occupation ou de présence Home Assistant. Le capteur de proximité de la tablette est aussi utilisé s’il existe.</string><string name="wake_none">Aucun capteur Home Assistant</string><string name="wake_entity_manual">Entité du capteur de réveil (optionnel)</string>
     <string name="display_title">Économiseur d’écran et veille</string><string name="display_subtitle">Définissez les délais d’inactivité. L’économiseur affiche l’heure, la météo et l’alarme ; la veille assombrit presque totalement l’écran tout en restant connectée.</string><string name="screensaver_minutes">Économiseur après (min)</string><string name="sleep_minutes">Veille après (min)</string><string name="zero_disables">0 = désactivé</string><string name="sleep_explanation">La veille reste connectée afin que les mouvements ou événements Alarmo puissent réveiller le panneau. Une alarme déclenchée ou en attente le réveille également.</string><string name="tap_to_wake">Touchez pour réveiller</string>
+
+    <string name="guest_wifi_setup_title">Bons Wi-Fi invités</string>
+    <string name="guest_wifi_setup_subtitle">HomePanel peut détecter UniFi Hotspot Manager et proposer aux visiteurs un bouton pour créer un bon puis afficher son code et son QR.</string>
+    <string name="guest_wifi_none">Bouton Wi-Fi invité désactivé</string>
+    <string name="guest_wifi_qr_hint">Entité QR : %1$s (activez-la dans Home Assistant si elle est désactivée)</string>
+    <string name="guest_wifi_not_found">Aucune entité de bon UniFi Hotspot Manager détectée. Relancez la détection après avoir configuré l’intégration dans Home Assistant.</string>
+    <string name="proximity_wake_title">Utiliser le capteur de proximité de la tablette</string>
+    <string name="proximity_wake_subtitle">Sortir de l’économiseur/veille lorsqu’une main ou une personne approche d’une tablette équipée d’un capteur de proximité.</string>
+    <string name="rtsp_title">Caméra frontale RTSP</string>
+    <string name="rtsp_subtitle">Expose la caméra frontale de la tablette en flux RTSP local, vidéo uniquement.</string>
+    <string name="rtsp_enable">Activer le serveur caméra RTSP</string>
+    <string name="rtsp_privacy_hint">L’autorisation caméra n’est demandée que si cette option est activée. Aucun microphone/audio n’est diffusé.</string>
+    <string name="rtsp_port">Port RTSP</string>
+    <string name="rtsp_port_hint">Par défaut : 8554. Ouvrez l’adresse rtsp:// affichée depuis un autre appareil du même réseau.</string>
+    <string name="rtsp_permission_needed">Autorisation caméra requise</string>
+    <string name="rtsp_running">Caméra RTSP active</string>
+    <string name="rtsp_starting">Démarrage de la caméra RTSP…</string>
+    <string name="rtsp_clients">%1$d client(s)</string>
+    <string name="guest_wifi_title">Wi-Fi invités</string>
+    <string name="guest_wifi_creating">Création du bon…</string>
+    <string name="guest_wifi_voucher_ready">Bon prêt · touchez pour l’afficher</string>
+    <string name="guest_wifi_tap">Touchez pour l’accès visiteur</string>
+    <string name="guest_wifi_code">Code du bon</string>
+    <string name="guest_wifi_no_voucher">Créez un bon pour donner un accès Wi-Fi temporaire à un visiteur.</string>
+    <string name="guest_wifi_qr">Code QR du Wi-Fi invités</string>
+    <string name="guest_wifi_qr_unavailable">Code QR indisponible.</string>
+    <string name="guest_wifi_enable_qr_entity">Si nécessaire, activez %1$s dans Home Assistant → Paramètres → Appareils et services → Entités.</string>
+    <string name="guest_wifi_duration">Durée : %1$s</string>
+    <string name="guest_wifi_status">Statut : %1$s</string>
+    <string name="guest_wifi_create">Créer un nouveau bon</string>
+    <string name="close">Fermer</string>
 </resources>

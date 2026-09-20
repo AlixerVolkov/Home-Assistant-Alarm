@@ -1,21 +1,10 @@
-# Build notes - HomePanel 0.3.0
+# Build notes — HomePanel v0.4.0
 
-The project is configured for the GitHub Actions build chain already proven by v0.2.x:
+El workflow incluido compila `:app:assembleRelease` con JDK 17, Gradle 9.6, AGP 9.4 y Android SDK 37.0, restaura la misma clave release desde GitHub Secrets y verifica el APK con `apksigner`.
 
-- JDK 17
-- Gradle 9.6.0
-- AGP 9.4.0
-- compileSdk 37 / compileSdkMinor 0
-- Android SDK package `platforms;android-37.0`
+Nuevas dependencias JitPack:
 
-Run:
+- `com.github.pedroSG94:RTSP-Server:1.4.2`
+- `com.github.pedroSG94.RootEncoder:library:2.8.0`
 
-```bash
-gradle --no-daemon --stacktrace :app:assembleDebug
-```
-
-Output:
-
-`app/build/outputs/apk/debug/app-debug.apk`
-
-The current ChatGPT container does not include a complete Android SDK/Gradle toolchain, so the authoritative full build remains the included GitHub Actions workflow.
+El contenedor usado para preparar este paquete no dispone del Android SDK/Gradle completo con acceso a repositorios, por lo que la compilación Android final debe validarse con el workflow de GitHub Actions incluido.

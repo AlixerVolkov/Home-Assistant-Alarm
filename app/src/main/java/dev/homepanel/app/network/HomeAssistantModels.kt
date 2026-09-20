@@ -16,9 +16,18 @@ data class WakeSensorSummary(
     val deviceClass: String?
 )
 
+data class GuestWifiSummary(
+    val displayName: String,
+    val voucherSensorEntityId: String,
+    val createButtonEntityId: String,
+    val qrImageEntityId: String?,
+    val wlanName: String?
+)
+
 data class PanelDiscoveryResult(
     val alarms: List<AlarmEntitySummary>,
-    val wakeSensors: List<WakeSensorSummary>
+    val wakeSensors: List<WakeSensorSummary>,
+    val guestWifi: List<GuestWifiSummary> = emptyList()
 )
 
 data class AlarmEntityState(
@@ -59,6 +68,15 @@ data class AlarmEntityState(
     }
 }
 
+data class GuestVoucherState(
+    val entityId: String,
+    val code: String,
+    val wlanName: String? = null,
+    val duration: String? = null,
+    val status: String? = null,
+    val note: String? = null
+)
+
 object AlarmFeatures {
     const val ARM_HOME = 1
     const val ARM_AWAY = 2
@@ -90,7 +108,10 @@ enum class ConnectionStatus {
 data class HomeAssistantConnectionState(
     val status: ConnectionStatus = ConnectionStatus.DISCONNECTED,
     val alarm: AlarmEntityState? = null,
+    val guestVoucher: GuestVoucherState? = null,
     val errorMessage: String? = null,
     val actionErrorMessage: String? = null,
-    val pendingAction: AlarmAction? = null
+    val guestErrorMessage: String? = null,
+    val pendingAction: AlarmAction? = null,
+    val pendingGuestVoucher: Boolean = false
 )

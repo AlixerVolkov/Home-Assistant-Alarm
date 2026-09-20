@@ -1,50 +1,77 @@
-# HomePanel v0.3.1
+# HomePanel v0.4.0
 
-A modern Android wall panel for Home Assistant / Alarmo.
+Panel Android moderno para Home Assistant / Alarmo, pensado para tablets de pared.
 
-## v0.3.1 highlights
+## Novedades v0.4.0
 
-- Home Assistant WebSocket alarm control with live state updates.
-- Automatic device language (English, Spanish, Dutch and French resources included).
-- Automatic city / region / weather coordinates from Android location permission.
-- Weather follows the device location and local time zone automatically.
-- Responsive Compose UI for phones, tablets, portrait, landscape and resizable windows.
-- Configurable screen saver timeout and low-power sleep timeout.
-- Screen saver shows clock, date, weather and alarm state and moves periodically to reduce burn-in risk.
-- Wake on Home Assistant motion / occupancy / presence sensor.
-- Wake on the tablet proximity sensor when hardware supports it.
-- Alarm `triggered`, `pending`, `arming` and `disarming` events wake the panel automatically.
-- Sleep mode stays connected and uses a nearly black, very dim screen so wake-on-detection remains reliable.
+- **Cámara frontal RTSP** opcional, solo vídeo, por defecto en el puerto `8554`.
+- El panel muestra la URL `rtsp://...` y el número de clientes conectados.
+- **Wi-Fi para visitas con UniFi Hotspot Manager**: detección automática de las entidades de voucher, botón para crear un vale y ventana con código + QR.
+- **Sensor de proximidad Android mejorado**: solo escucha durante salvapantallas/reposo, despierta en el flanco lejos→cerca y aplica debounce para evitar falsos despertares repetidos.
+- Solicitud del permiso **ACCESS_LOCAL_NETWORK** en Android 17 / API 37 para Home Assistant y RTSP en la LAN.
+- Mantiene todas las funciones de v0.3.x: Alarmo, tiempo por ubicación automática, idiomas del sistema, interfaz responsive, salvapantallas y despertar por sensores de Home Assistant.
 
-## First start
+## Configuración
 
-1. Allow approximate or precise location if you want automatic local weather.
-2. Enter the Home Assistant URL and a long-lived access token.
-3. Tap **Discover devices**.
-4. Select the `alarm_control_panel` entity.
-5. Optionally select a `binary_sensor` with device class motion, occupancy or presence to wake the panel.
-6. Choose the screen saver and sleep inactivity times.
-7. Save and connect.
+1. Introduce la URL y el Long-Lived Access Token de Home Assistant.
+2. Pulsa **Detectar dispositivos**.
+3. Selecciona `alarm_control_panel`.
+4. Opcionalmente selecciona el sensor de movimiento/presencia para despertar.
+5. Si se detecta **UniFi Hotspot Manager**, selecciona la red de invitados. Si solo hay una, HomePanel la selecciona automáticamente.
+6. Activa/desactiva el sensor de proximidad propio de la tablet.
+7. Opcionalmente activa **Cámara frontal RTSP** y elige el puerto (8554 por defecto).
+8. Guarda y conecta.
 
-Existing v0.2.x settings are migrated automatically. The new wake sensor remains optional and default screen saver / sleep timers are 2 and 10 minutes.
+## UniFi Hotspot Manager
 
-## GitHub Actions APK
+HomePanel busca el conjunto de entidades:
 
-Push the project to `main`. The included workflow builds the debug APK. Download the artifact named:
+- `button.<config_id>_create`
+- `sensor.<config_id>_voucher`
+- `image.<config_id>_qr_code`
 
-`HomePanel-v0.3.1-debug-apk`
+La entidad `image.*_qr_code` puede venir deshabilitada por defecto en Home Assistant. Si no aparece el QR, actívala desde **Ajustes → Dispositivos y servicios → Entidades** y vuelve a abrir/actualizar la pantalla de invitados.
 
-The APK inside the artifact is `app-debug.apk`.
+El botón de HomePanel llama a `button.press` sobre `button.<config_id>_create`, usando así los valores de duración/cuota configurados en la propia integración.
 
-## Notes about sleep
+## RTSP
 
-HomePanel deliberately uses a low-power in-app sleep mode instead of fully powering the display off. This keeps the WebSocket connection and detection logic alive so the panel can wake immediately when a Home Assistant motion sensor, Alarmo event or local proximity sensor fires.
+Al activarlo, HomePanel solicita permiso de cámara y utiliza **solo la cámara frontal**. No transmite micrófono ni audio.
 
-## Security
+Ejemplo:
 
-The access token is stored encrypted with Android Keystore. Prefer HTTPS/WSS for Home Assistant.
+```text
+rtsp://192.168.1.50:8554/
+```
 
+El RTSP está pensado para la red local. El stream se mantiene mientras HomePanel está ejecutándose como panel; Android puede restringir el acceso a cámara si el usuario manda la app completamente al segundo plano.
 
-## Firma y actualizaciones
+## Compilación y actualizaciones
 
-Para generar APKs que puedan actualizar versiones anteriores sin perder datos, configura una firma estable siguiendo `SIGNING_WINDOWS.md`.
+La aplicación conserva:
+
+```text
+applicationId = dev.homepanel.app
+versionCode = 6
+versionName = 0.4.0
+```
+
+El workflow de GitHub Actions genera un APK release firmado usando los mismos cuatro secrets de firma de v0.3.1:
+
+- `ANDROID_KEYSTORE_BASE64`
+- `ANDROID_KEYSTORE_PASSWORD`
+- `ANDROID_KEY_ALIAS`
+- `ANDROID_KEY_PASSWORD`
+
+Artefacto esperado:
+
+```text
+HomePanel-v0.4.0-signed-apk
+└── HomePanel-v0.4.0.apk
+```
+
+No cambies ni pierdas el `.jks`: las actualizaciones Android requieren la misma clave de firma.
+
+## Seguridad
+
+El token de Home Assistant se almacena cifrado mediante Android Keystore. Usa HTTPS/WSS para Home Assistant siempre que sea posible. RTSP v0.4.0 es un stream local sin TLS ni autenticación; úsalo solo en una LAN/VLAN de confianza.

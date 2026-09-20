@@ -52,18 +52,18 @@ Crea exactamente estos cuatro secretos:
 
 ## 4. Compilar
 
-Haz push de v0.3.1 a `main` o ejecuta manualmente:
+Haz push de v0.4.0 a `main` o ejecuta manualmente:
 
 `Actions` -> `Build signed Android APK` -> `Run workflow`
 
 El artefacto final se llama:
 
-`HomePanel-v0.3.1-signed-apk`
+`HomePanel-v0.4.0-signed-apk`
 
 Y contiene:
 
-- `HomePanel-v0.3.1.apk`
-- `HomePanel-v0.3.1.apk.sha256`
+- `HomePanel-v0.4.0.apk`
+- `HomePanel-v0.4.0.apk.sha256`
 
 ## Actualizaciones futuras
 

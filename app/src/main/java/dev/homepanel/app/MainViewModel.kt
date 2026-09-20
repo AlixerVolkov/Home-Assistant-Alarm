@@ -4,6 +4,7 @@ import android.app.Application
 import android.os.SystemClock
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import dev.homepanel.app.camera.RtspCameraServer
 import dev.homepanel.app.data.PanelSettings
 import dev.homepanel.app.data.SettingsRepository
 import dev.homepanel.app.network.AlarmAction
@@ -11,6 +12,7 @@ import dev.homepanel.app.network.AlarmEntitySummary
 import dev.homepanel.app.network.ConnectionStatus
 import dev.homepanel.app.network.DeviceLocation
 import dev.homepanel.app.network.DeviceLocationResolver
+import dev.homepanel.app.network.GuestWifiSummary
 import dev.homepanel.app.network.HomeAssistantRestClient
 import dev.homepanel.app.network.HomeAssistantWebSocket
 import dev.homepanel.app.network.WakeSensorSummary
@@ -30,6 +32,7 @@ data class DiscoveryState(
     val isLoading: Boolean = false,
     val alarms: List<AlarmEntitySummary> = emptyList(),
     val wakeSensors: List<WakeSensorSummary> = emptyList(),
+    val guestWifi: List<GuestWifiSummary> = emptyList(),
     val errorMessage: String? = null
 )
 
@@ -42,6 +45,12 @@ data class WeatherUiState(
 data class LocationUiState(
     val isLoading: Boolean = false,
     val location: DeviceLocation? = null,
+    val errorMessage: String? = null
+)
+
+data class GuestWifiUiState(
+    val isLoadingQr: Boolean = false,
+    val qrImageBytes: ByteArray? = null,
     val errorMessage: String? = null
 )
 
@@ -65,6 +74,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val socketClient = HomeAssistantWebSocket(httpClient)
     private val weatherClient = WeatherClient(httpClient)
     private val locationResolver = DeviceLocationResolver(application)
+    private val rtspCameraServer = RtspCameraServer(application)
 
     private val _settings = MutableStateFlow<PanelSettings?>(null)
     val settings: StateFlow<PanelSettings?> = _settings.asStateFlow()
@@ -84,6 +94,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val _location = MutableStateFlow(LocationUiState())
     val location: StateFlow<LocationUiState> = _location.asStateFlow()
 
+    private val _guestWifi = MutableStateFlow(GuestWifiUiState())
+    val guestWifi: StateFlow<GuestWifiUiState> = _guestWifi.asStateFlow()
+
     private val _displayMode = MutableStateFlow(PanelDisplayMode.ACTIVE)
     val displayMode: StateFlow<PanelDisplayMode> = _displayMode.asStateFlow()
 
@@ -91,8 +104,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     val wakePulse: StateFlow<Long> = _wakePulse.asStateFlow()
 
     val connection = socketClient.state
+    val rtspCamera = rtspCameraServer.state
 
     private var lastActivityElapsed = SystemClock.elapsedRealtime()
+    private var lastGuestVoucherCode: String? = null
 
     init {
         viewModelScope.launch {
@@ -100,6 +115,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 _settings.value = current
                 _settingsLoaded.value = true
                 userActivity()
+                applyRtspSettings(current)
                 if (current != null && !_editing.value) {
                     connect(current)
                 } else if (current == null) {
@@ -117,6 +133,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             while (isActive) {
                 updateDisplayMode()
+                rtspCameraServer.refreshStats()
                 delay(1_000L)
             }
         }
@@ -145,9 +162,40 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 }
             }
         }
+
+        viewModelScope.launch {
+            socketClient.state.collect { state ->
+                val code = state.guestVoucher?.code?.takeIf { it.isNotBlank() }
+                if (code != null && code != lastGuestVoucherCode) {
+                    lastGuestVoucherCode = code
+                    // Give the image entity a moment to regenerate its QR after the voucher changes.
+                    delay(700L)
+                    refreshGuestQr(showSpinner = false)
+                }
+            }
+        }
     }
 
     fun hasLocationPermission(): Boolean = locationResolver.hasLocationPermission()
+    fun hasCameraPermission(): Boolean = rtspCameraServer.hasCameraPermission()
+
+    fun onCameraPermissionResult(granted: Boolean) {
+        val current = _settings.value ?: return
+        if (granted && current.rtspEnabled) {
+            rtspCameraServer.start(current.rtspPort)
+        }
+    }
+
+    fun onLocalNetworkPermissionResult(granted: Boolean) {
+        if (!granted) return
+        _settings.value?.let { current ->
+            connect(current)
+            if (current.rtspEnabled) {
+                rtspCameraServer.stop()
+                rtspCameraServer.start(current.rtspPort)
+            }
+        }
+    }
 
     fun refreshDeviceLocation() {
         if (!locationResolver.hasLocationPermission()) {
@@ -190,7 +238,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     _discovery.value = DiscoveryState(
                         hasRun = true,
                         alarms = result.alarms,
-                        wakeSensors = result.wakeSensors
+                        wakeSensors = result.wakeSensors,
+                        guestWifi = result.guestWifi
                     )
                 }
                 .onFailure { error ->
@@ -202,34 +251,31 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    fun saveConfiguration(
-        baseUrl: String,
-        token: String,
-        alarmEntityId: String,
-        wakeEntityId: String?,
-        screensaverMinutes: Int,
-        sleepMinutes: Int
-    ) {
-        if (baseUrl.isBlank() || token.isBlank() || alarmEntityId.isBlank()) return
+    fun saveConfiguration(draft: PanelSettings) {
+        if (draft.baseUrl.isBlank() || draft.accessToken.isBlank() || draft.alarmEntityId.isBlank()) return
 
-        val normalizedSaver = screensaverMinutes.coerceAtLeast(0)
-        val normalizedSleep = sleepMinutes.coerceAtLeast(0).let { value ->
+        val normalizedSaver = draft.screensaverTimeoutMinutes.coerceAtLeast(0)
+        val normalizedSleep = draft.sleepTimeoutMinutes.coerceAtLeast(0).let { value ->
             if (value > 0 && normalizedSaver > 0 && value <= normalizedSaver) normalizedSaver + 1 else value
         }
+        val normalized = draft.copy(
+            baseUrl = draft.baseUrl.trim(),
+            accessToken = draft.accessToken.trim(),
+            alarmEntityId = draft.alarmEntityId.trim(),
+            wakeEntityId = draft.wakeEntityId?.trim()?.takeIf { it.isNotBlank() },
+            screensaverTimeoutMinutes = normalizedSaver,
+            sleepTimeoutMinutes = normalizedSleep,
+            rtspPort = draft.rtspPort.coerceIn(1024, 65535),
+            guestVoucherSensorEntityId = draft.guestVoucherSensorEntityId?.trim()?.takeIf { it.isNotBlank() },
+            guestCreateButtonEntityId = draft.guestCreateButtonEntityId?.trim()?.takeIf { it.isNotBlank() },
+            guestQrImageEntityId = draft.guestQrImageEntityId?.trim()?.takeIf { it.isNotBlank() }
+        )
 
         viewModelScope.launch {
             _editing.value = false
-            settingsRepository.save(
-                PanelSettings(
-                    baseUrl = baseUrl,
-                    accessToken = token,
-                    alarmEntityId = alarmEntityId,
-                    wakeEntityId = wakeEntityId?.takeIf { it.isNotBlank() },
-                    screensaverTimeoutMinutes = normalizedSaver,
-                    sleepTimeoutMinutes = normalizedSleep
-                )
-            )
+            settingsRepository.save(normalized)
             _discovery.value = DiscoveryState()
+            _guestWifi.value = GuestWifiUiState()
             userActivity()
         }
     }
@@ -251,9 +297,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             _editing.value = true
             socketClient.disconnect()
+            rtspCameraServer.stop()
             settingsRepository.clear()
             _editing.value = false
             _discovery.value = DiscoveryState()
+            _guestWifi.value = GuestWifiUiState()
             userActivity()
         }
     }
@@ -266,6 +314,38 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun performAction(action: AlarmAction, code: String?) {
         userActivity()
         socketClient.performAction(action, code)
+    }
+
+    fun createGuestVoucher() {
+        userActivity()
+        socketClient.createGuestVoucher()
+        viewModelScope.launch {
+            delay(1_500L)
+            refreshGuestQr(showSpinner = false)
+        }
+    }
+
+    fun refreshGuestQr(showSpinner: Boolean = true) {
+        val current = _settings.value ?: return
+        val entityId = current.guestQrImageEntityId
+        if (entityId.isNullOrBlank()) {
+            _guestWifi.value = GuestWifiUiState(errorMessage = "No UniFi QR image entity is configured")
+            return
+        }
+
+        viewModelScope.launch {
+            if (showSpinner) _guestWifi.value = _guestWifi.value.copy(isLoadingQr = true, errorMessage = null)
+            runCatching { restClient.fetchImage(current.baseUrl, current.accessToken, entityId) }
+                .onSuccess { bytes ->
+                    _guestWifi.value = GuestWifiUiState(qrImageBytes = bytes)
+                }
+                .onFailure { error ->
+                    _guestWifi.value = _guestWifi.value.copy(
+                        isLoadingQr = false,
+                        errorMessage = error.message ?: "Could not load the guest Wi-Fi QR code"
+                    )
+                }
+        }
     }
 
     fun refreshWeather() {
@@ -339,12 +419,23 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             baseUrl = settings.baseUrl,
             token = settings.accessToken,
             entityId = settings.alarmEntityId,
-            wakeEntityId = settings.wakeEntityId
+            wakeEntityId = settings.wakeEntityId,
+            guestVoucherSensorEntityId = settings.guestVoucherSensorEntityId,
+            guestCreateButtonEntityId = settings.guestCreateButtonEntityId
         )
+    }
+
+    private fun applyRtspSettings(settings: PanelSettings?) {
+        if (settings?.rtspEnabled == true) {
+            rtspCameraServer.start(settings.rtspPort)
+        } else {
+            rtspCameraServer.stop()
+        }
     }
 
     override fun onCleared() {
         socketClient.disconnect()
+        rtspCameraServer.stop()
         httpClient.dispatcher.executorService.shutdown()
         httpClient.connectionPool.evictAll()
         super.onCleared()

@@ -5,6 +5,7 @@ import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import org.json.JSONArray
+import org.json.JSONObject
 
 class HomeAssistantRestClient(
     private val client: OkHttpClient
@@ -13,12 +14,10 @@ class HomeAssistantRestClient(
         baseUrl: String,
         accessToken: String
     ): PanelDiscoveryResult = withContext(Dispatchers.IO) {
-        val request = Request.Builder()
-            .url(HomeAssistantUrl.restUrl(baseUrl, "api/states"))
-            .header("Authorization", "Bearer ${accessToken.trim()}")
-            .header("Content-Type", "application/json")
-            .get()
-            .build()
+        val request = authenticatedRequest(
+            url = HomeAssistantUrl.restUrl(baseUrl, "api/states"),
+            accessToken = accessToken
+        ).get().build()
 
         client.newCall(request).execute().use { response ->
             if (!response.isSuccessful) {
@@ -26,16 +25,19 @@ class HomeAssistantRestClient(
             }
 
             val states = JSONArray(response.body.string())
+            val stateByEntityId = linkedMapOf<String, JSONObject>()
+            for (index in 0 until states.length()) {
+                val item = states.optJSONObject(index) ?: continue
+                val entityId = item.optString("entity_id")
+                if (entityId.isNotBlank()) stateByEntityId[entityId] = item
+            }
+
             val alarms = mutableListOf<AlarmEntitySummary>()
             val wakeSensors = mutableListOf<WakeSensorSummary>()
 
-            for (index in 0 until states.length()) {
-                val item = states.getJSONObject(index)
-                val entityId = item.optString("entity_id")
+            stateByEntityId.forEach { (entityId, item) ->
                 val attributes = item.optJSONObject("attributes")
-                val friendlyName = attributes?.optString("friendly_name")
-                    ?.takeIf { it.isNotBlank() }
-                    ?: entityId.substringAfter('.').replace('_', ' ')
+                val friendlyName = friendlyName(entityId, attributes)
 
                 if (entityId.startsWith("alarm_control_panel.")) {
                     alarms += AlarmEntitySummary(
@@ -63,12 +65,70 @@ class HomeAssistantRestClient(
                 }
             }
 
+            val guestWifi = stateByEntityId.entries.mapNotNull { (entityId, item) ->
+                if (!entityId.startsWith("sensor.") || !entityId.endsWith("_voucher")) return@mapNotNull null
+
+                val configKey = entityId.removePrefix("sensor.").removeSuffix("_voucher")
+                val createButton = "button.${configKey}_create"
+                if (!stateByEntityId.containsKey(createButton)) return@mapNotNull null
+
+                val qrCandidate = "image.${configKey}_qr_code"
+                val attributes = item.optJSONObject("attributes")
+                val wlanName = attributes?.optString("wlan_name")
+                    ?.takeIf { it.isNotBlank() && it != "null" }
+                val name = wlanName ?: friendlyName(entityId, attributes)
+
+                GuestWifiSummary(
+                    displayName = name,
+                    voucherSensorEntityId = entityId,
+                    createButtonEntityId = createButton,
+                    // Keep the predictable entity id even when the image entity is disabled in HA.
+                    // This lets the UI explain exactly which entity needs enabling.
+                    qrImageEntityId = qrCandidate,
+                    wlanName = wlanName
+                )
+            }.sortedBy { it.displayName.lowercase() }
+
             PanelDiscoveryResult(
                 alarms = alarms.sortedBy { it.friendlyName.lowercase() },
-                wakeSensors = wakeSensors.sortedBy { it.friendlyName.lowercase() }
+                wakeSensors = wakeSensors.sortedBy { it.friendlyName.lowercase() },
+                guestWifi = guestWifi
             )
         }
     }
+
+    suspend fun fetchImage(
+        baseUrl: String,
+        accessToken: String,
+        imageEntityId: String
+    ): ByteArray = withContext(Dispatchers.IO) {
+        val request = authenticatedRequest(
+            url = HomeAssistantUrl.restUrl(baseUrl, "api/image_proxy/${imageEntityId.trim()}"),
+            accessToken = accessToken
+        ).get().build()
+
+        client.newCall(request).execute().use { response ->
+            if (!response.isSuccessful) {
+                error("Home Assistant image returned HTTP ${response.code}")
+            }
+            val contentType = response.header("Content-Type").orEmpty()
+            if (!contentType.startsWith("image/", ignoreCase = true)) {
+                error("Home Assistant did not return an image")
+            }
+            response.body.bytes()
+        }
+    }
+
+    private fun authenticatedRequest(url: String, accessToken: String): Request.Builder =
+        Request.Builder()
+            .url(url)
+            .header("Authorization", "Bearer ${accessToken.trim()}")
+            .header("Content-Type", "application/json")
+
+    private fun friendlyName(entityId: String, attributes: JSONObject?): String =
+        attributes?.optString("friendly_name")
+            ?.takeIf { it.isNotBlank() }
+            ?: entityId.substringAfter('.').replace('_', ' ')
 
     companion object {
         private val WAKE_DEVICE_CLASSES = setOf("motion", "occupancy", "presence")

@@ -4,11 +4,14 @@ import android.Manifest
 import android.app.Activity
 import android.content.Context
 import android.content.ContextWrapper
+import android.content.pm.PackageManager
 import android.hardware.Sensor
 import android.hardware.SensorEvent
 import android.hardware.SensorEventListener
 import android.hardware.SensorManager
+import android.os.Build
 import android.os.PowerManager
+import android.os.SystemClock
 import android.view.WindowManager
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -16,7 +19,6 @@ import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -24,7 +26,9 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
+import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.homepanel.app.MainViewModel
 import dev.homepanel.app.PanelDisplayMode
@@ -40,6 +44,8 @@ fun HomePanelApp(viewModel: MainViewModel) {
     val discovery by viewModel.discovery.collectAsStateWithLifecycle()
     val connection by viewModel.connection.collectAsStateWithLifecycle()
     val weather by viewModel.weather.collectAsStateWithLifecycle()
+    val guestWifi by viewModel.guestWifi.collectAsStateWithLifecycle()
+    val rtspCamera by viewModel.rtspCamera.collectAsStateWithLifecycle()
     val displayMode by viewModel.displayMode.collectAsStateWithLifecycle()
     val wakePulse by viewModel.wakePulse.collectAsStateWithLifecycle()
 
@@ -49,6 +55,18 @@ fun HomePanelApp(viewModel: MainViewModel) {
         if (result.values.any { it }) {
             viewModel.refreshDeviceLocation()
         }
+    }
+
+    val cameraPermissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        viewModel.onCameraPermissionResult(granted)
+    }
+
+    val localNetworkPermissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        viewModel.onLocalNetworkPermissionResult(granted)
     }
 
     LaunchedEffect(Unit) {
@@ -62,17 +80,41 @@ fun HomePanelApp(viewModel: MainViewModel) {
                 )
             )
         }
+
+        if (Build.VERSION.SDK_INT >= 37 &&
+            ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_LOCAL_NETWORK) != PackageManager.PERMISSION_GRANTED
+        ) {
+            localNetworkPermissionLauncher.launch(Manifest.permission.ACCESS_LOCAL_NETWORK)
+        }
     }
 
-    DisposableEffect(context) {
+    LaunchedEffect(settings?.rtspEnabled) {
+        if (settings?.rtspEnabled == true && !viewModel.hasCameraPermission()) {
+            cameraPermissionLauncher.launch(Manifest.permission.CAMERA)
+        }
+    }
+
+    // The tablet's own proximity sensor is used only while the saver/sleep screen is active.
+    // Waking on a FAR -> NEAR edge avoids continuous wake events from noisy proximity sensors.
+    DisposableEffect(context, settings?.proximityWakeEnabled, displayMode) {
+        val shouldListen = settings?.proximityWakeEnabled == true && displayMode != PanelDisplayMode.ACTIVE
+        if (!shouldListen) return@DisposableEffect onDispose { }
+
         val sensorManager = context.getSystemService(Context.SENSOR_SERVICE) as SensorManager
         val proximity = sensorManager.getDefaultSensor(Sensor.TYPE_PROXIMITY)
+        var wasNear = false
+        var lastWakeElapsed = 0L
+
         val listener = object : SensorEventListener {
             override fun onSensorChanged(event: SensorEvent) {
                 val distance = event.values.firstOrNull() ?: return
-                if (distance < event.sensor.maximumRange) {
+                val isNear = distance < event.sensor.maximumRange
+                val now = SystemClock.elapsedRealtime()
+                if (isNear && !wasNear && now - lastWakeElapsed >= PROXIMITY_DEBOUNCE_MS) {
+                    lastWakeElapsed = now
                     viewModel.onLocalDetection()
                 }
+                wasNear = isNear
             }
 
             override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) = Unit
@@ -131,7 +173,11 @@ fun HomePanelApp(viewModel: MainViewModel) {
                 settings = currentSettings,
                 connectionState = connection,
                 weatherState = weather,
+                guestWifiState = guestWifi,
+                rtspCameraState = rtspCamera,
                 onAction = viewModel::performAction,
+                onCreateGuestVoucher = viewModel::createGuestVoucher,
+                onRefreshGuestQr = { viewModel.refreshGuestQr() },
                 onReconnect = viewModel::reconnect,
                 onRefreshWeather = viewModel::refreshWeather,
                 onSettings = viewModel::editConfiguration
@@ -171,7 +217,7 @@ private fun Activity.setPanelBrightness(mode: PanelDisplayMode) {
 
 @Suppress("DEPRECATION")
 private fun Activity.wakeHardwareScreen() {
-    if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O_MR1) {
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
         setTurnScreenOn(true)
     }
 
@@ -182,3 +228,5 @@ private fun Activity.wakeHardwareScreen() {
     )
     wakeLock.acquire(3_000L)
 }
+
+private const val PROXIMITY_DEBOUNCE_MS = 900L

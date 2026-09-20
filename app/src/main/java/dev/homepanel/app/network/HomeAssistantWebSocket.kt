@@ -21,6 +21,7 @@ class HomeAssistantWebSocket(
 ) {
     private val nextId = AtomicInteger(1)
     private val actionRequestIds = ConcurrentHashMap<Int, AlarmAction>()
+    private val guestVoucherRequestIds = ConcurrentHashMap.newKeySet<Int>()
 
     private val _state = MutableStateFlow(HomeAssistantConnectionState())
     val state: StateFlow<HomeAssistantConnectionState> = _state.asStateFlow()
@@ -32,13 +33,24 @@ class HomeAssistantWebSocket(
     private var accessToken: String = ""
     private var alarmEntityId: String = ""
     private var wakeEntityId: String? = null
+    private var guestVoucherSensorEntityId: String? = null
+    private var guestCreateButtonEntityId: String? = null
     private var getStatesRequestId: Int? = null
 
-    fun connect(baseUrl: String, token: String, entityId: String, wakeEntityId: String? = null) {
+    fun connect(
+        baseUrl: String,
+        token: String,
+        entityId: String,
+        wakeEntityId: String? = null,
+        guestVoucherSensorEntityId: String? = null,
+        guestCreateButtonEntityId: String? = null
+    ) {
         disconnect()
         accessToken = token.trim()
         alarmEntityId = entityId.trim()
         this.wakeEntityId = wakeEntityId?.trim()?.takeIf { it.isNotBlank() }
+        this.guestVoucherSensorEntityId = guestVoucherSensorEntityId?.trim()?.takeIf { it.isNotBlank() }
+        this.guestCreateButtonEntityId = guestCreateButtonEntityId?.trim()?.takeIf { it.isNotBlank() }
         _state.value = HomeAssistantConnectionState(status = ConnectionStatus.CONNECTING)
 
         val request = Request.Builder()
@@ -54,19 +66,12 @@ class HomeAssistantWebSocket(
         current?.close(1000, "Client disconnect")
         getStatesRequestId = null
         actionRequestIds.clear()
+        guestVoucherRequestIds.clear()
         _state.value = HomeAssistantConnectionState(status = ConnectionStatus.DISCONNECTED)
     }
 
     fun performAction(action: AlarmAction, code: String?) {
-        val socket = webSocket ?: run {
-            _state.value = _state.value.copy(actionErrorMessage = "Not connected to Home Assistant")
-            return
-        }
-
-        if (_state.value.status != ConnectionStatus.CONNECTED) {
-            _state.value = _state.value.copy(actionErrorMessage = "Home Assistant is not authenticated")
-            return
-        }
+        val socket = authenticatedSocket() ?: return
 
         val alarm = _state.value.alarm
         if (alarm != null && !alarm.canPerform(action)) {
@@ -106,6 +111,58 @@ class HomeAssistantWebSocket(
         }
     }
 
+    fun createGuestVoucher() {
+        val socket = authenticatedSocket(guestAction = true) ?: return
+        val createButton = guestCreateButtonEntityId
+        if (createButton.isNullOrBlank()) {
+            _state.value = _state.value.copy(guestErrorMessage = "No UniFi voucher create button is configured")
+            return
+        }
+
+        val requestId = nextId.getAndIncrement()
+        guestVoucherRequestIds += requestId
+        val payload = JSONObject()
+            .put("id", requestId)
+            .put("type", "call_service")
+            .put("domain", "button")
+            .put("service", "press")
+            .put("target", JSONObject().put("entity_id", createButton))
+
+        _state.value = _state.value.copy(
+            pendingGuestVoucher = true,
+            guestErrorMessage = null
+        )
+
+        if (!socket.send(payload.toString())) {
+            guestVoucherRequestIds.remove(requestId)
+            _state.value = _state.value.copy(
+                pendingGuestVoucher = false,
+                guestErrorMessage = "Could not request a new guest voucher"
+            )
+        }
+    }
+
+    private fun authenticatedSocket(guestAction: Boolean = false): WebSocket? {
+        val socket = webSocket
+        if (socket == null) {
+            if (guestAction) {
+                _state.value = _state.value.copy(guestErrorMessage = "Not connected to Home Assistant")
+            } else {
+                _state.value = _state.value.copy(actionErrorMessage = "Not connected to Home Assistant")
+            }
+            return null
+        }
+        if (_state.value.status != ConnectionStatus.CONNECTED) {
+            if (guestAction) {
+                _state.value = _state.value.copy(guestErrorMessage = "Home Assistant is not authenticated")
+            } else {
+                _state.value = _state.value.copy(actionErrorMessage = "Home Assistant is not authenticated")
+            }
+            return null
+        }
+        return socket
+    }
+
     private val listener = object : WebSocketListener() {
         override fun onOpen(webSocket: WebSocket, response: Response) {
             if (this@HomeAssistantWebSocket.webSocket !== webSocket) return
@@ -118,7 +175,8 @@ class HomeAssistantWebSocket(
                 .onFailure { error ->
                     _state.value = _state.value.copy(
                         errorMessage = error.message ?: "Invalid message from Home Assistant",
-                        pendingAction = null
+                        pendingAction = null,
+                        pendingGuestVoucher = false
                     )
                 }
         }
@@ -133,7 +191,8 @@ class HomeAssistantWebSocket(
             this@HomeAssistantWebSocket.webSocket = null
             _state.value = _state.value.copy(
                 status = ConnectionStatus.DISCONNECTED,
-                pendingAction = null
+                pendingAction = null,
+                pendingGuestVoucher = false
             )
         }
 
@@ -143,7 +202,8 @@ class HomeAssistantWebSocket(
             _state.value = _state.value.copy(
                 status = ConnectionStatus.ERROR,
                 errorMessage = t.message ?: "WebSocket connection failed",
-                pendingAction = null
+                pendingAction = null,
+                pendingGuestVoucher = false
             )
         }
     }
@@ -156,7 +216,8 @@ class HomeAssistantWebSocket(
                 _state.value = _state.value.copy(
                     status = ConnectionStatus.ERROR,
                     errorMessage = message.optString("message", "Invalid Home Assistant token"),
-                    pendingAction = null
+                    pendingAction = null,
+                    pendingGuestVoucher = false
                 )
                 this@HomeAssistantWebSocket.webSocket = null
                 socket.close(1008, "Authentication failed")
@@ -204,16 +265,20 @@ class HomeAssistantWebSocket(
             }
 
             val result = message.optJSONArray("result") ?: JSONArray()
-            var found = false
+            var alarmFound = false
+            var guestState: GuestVoucherState? = null
             for (index in 0 until result.length()) {
                 val item = result.optJSONObject(index) ?: continue
-                if (item.optString("entity_id") == alarmEntityId) {
-                    found = true
-                    _state.value = _state.value.copy(alarm = parseAlarmState(item))
-                    break
+                when (item.optString("entity_id")) {
+                    alarmEntityId -> {
+                        alarmFound = true
+                        _state.value = _state.value.copy(alarm = parseAlarmState(item))
+                    }
+                    guestVoucherSensorEntityId -> guestState = parseGuestVoucherState(item)
                 }
             }
-            if (!found) {
+            _state.value = _state.value.copy(guestVoucher = guestState)
+            if (!alarmFound) {
                 _state.value = _state.value.copy(errorMessage = "Selected alarm entity was not found")
             }
             return
@@ -229,6 +294,21 @@ class HomeAssistantWebSocket(
                     pendingAction = null
                 )
             }
+            return
+        }
+
+        if (guestVoucherRequestIds.remove(requestId)) {
+            if (message.optBoolean("success", false)) {
+                _state.value = _state.value.copy(
+                    pendingGuestVoucher = false,
+                    guestErrorMessage = null
+                )
+            } else {
+                _state.value = _state.value.copy(
+                    pendingGuestVoucher = false,
+                    guestErrorMessage = extractError(message, "Guest voucher creation failed")
+                )
+            }
         }
     }
 
@@ -241,6 +321,14 @@ class HomeAssistantWebSocket(
 
         if (entityId == wakeEntityId && isDetectionState(newValue)) {
             _wakeEvents.tryEmit(Unit)
+        }
+
+        if (entityId == guestVoucherSensorEntityId) {
+            _state.value = _state.value.copy(
+                guestVoucher = parseGuestVoucherState(newState),
+                pendingGuestVoucher = false,
+                guestErrorMessage = null
+            )
         }
 
         if (entityId != alarmEntityId) return
@@ -277,6 +365,21 @@ class HomeAssistantWebSocket(
         )
     }
 
+    private fun parseGuestVoucherState(item: JSONObject): GuestVoucherState {
+        val attributes = item.optJSONObject("attributes")
+        val value = item.optString("state", "")
+        return GuestVoucherState(
+            entityId = item.optString("entity_id", guestVoucherSensorEntityId.orEmpty()),
+            code = value.takeUnless { it in INVALID_GUEST_STATES }.orEmpty(),
+            wlanName = attributes?.optString("wlan_name")?.takeUseful(),
+            duration = attributes?.opt("duration")?.toString()?.takeUseful(),
+            status = attributes?.optString("status")?.takeUseful(),
+            note = attributes?.optString("note")?.takeUseful()
+        )
+    }
+
+    private fun String.takeUseful(): String? = takeIf { isNotBlank() && this != "null" && this != "unknown" }
+
     private fun extractError(message: JSONObject, fallback: String): String {
         return message.optJSONObject("error")
             ?.optString("message")
@@ -291,5 +394,6 @@ class HomeAssistantWebSocket(
     companion object {
         private val DETECTION_STATES = setOf("on", "home", "detected", "occupied", "open", "true")
         private val WAKE_ALARM_STATES = setOf("triggered", "pending", "arming", "disarming")
+        private val INVALID_GUEST_STATES = setOf("unknown", "unavailable", "none", "null")
     }
 }
