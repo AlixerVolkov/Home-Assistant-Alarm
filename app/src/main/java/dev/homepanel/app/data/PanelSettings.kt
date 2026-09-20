@@ -12,5 +12,6 @@ data class PanelSettings(
     val rtspPort: Int = 8554,
     val guestVoucherSensorEntityId: String? = null,
     val guestCreateButtonEntityId: String? = null,
+    val guestDeleteButtonEntityId: String? = null,
     val guestQrImageEntityId: String? = null
 )

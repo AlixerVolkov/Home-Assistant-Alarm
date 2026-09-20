@@ -159,6 +159,7 @@ fun HomePanelApp(viewModel: MainViewModel) {
             SetupScreen(
                 initialSettings = currentSettings,
                 discoveryState = discovery,
+                rtspCameraState = rtspCamera,
                 canCancel = currentSettings != null,
                 onDiscover = viewModel::discoverAlarms,
                 onSave = viewModel::saveConfiguration,
@@ -174,9 +175,9 @@ fun HomePanelApp(viewModel: MainViewModel) {
                 connectionState = connection,
                 weatherState = weather,
                 guestWifiState = guestWifi,
-                rtspCameraState = rtspCamera,
                 onAction = viewModel::performAction,
                 onCreateGuestVoucher = viewModel::createGuestVoucher,
+                onDeleteGuestVoucher = viewModel::deleteGuestVoucher,
                 onRefreshGuestQr = { viewModel.refreshGuestQr() },
                 onReconnect = viewModel::reconnect,
                 onRefreshWeather = viewModel::refreshWeather,

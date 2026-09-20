@@ -20,6 +20,7 @@ data class GuestWifiSummary(
     val displayName: String,
     val voucherSensorEntityId: String,
     val createButtonEntityId: String,
+    val deleteButtonEntityId: String?,
     val qrImageEntityId: String?,
     val wlanName: String?
 )
@@ -113,5 +114,6 @@ data class HomeAssistantConnectionState(
     val actionErrorMessage: String? = null,
     val guestErrorMessage: String? = null,
     val pendingAction: AlarmAction? = null,
-    val pendingGuestVoucher: Boolean = false
+    val pendingGuestVoucher: Boolean = false,
+    val pendingGuestVoucherDelete: Boolean = false
 )

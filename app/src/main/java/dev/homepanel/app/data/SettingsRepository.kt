@@ -38,6 +38,10 @@ class SettingsRepository(
                 rtspPort = preferences[KEY_RTSP_PORT] ?: 8554,
                 guestVoucherSensorEntityId = preferences[KEY_GUEST_VOUCHER_SENSOR]?.takeIf { it.isNotBlank() },
                 guestCreateButtonEntityId = preferences[KEY_GUEST_CREATE_BUTTON]?.takeIf { it.isNotBlank() },
+                guestDeleteButtonEntityId = preferences[KEY_GUEST_DELETE_BUTTON]?.takeIf { it.isNotBlank() }
+                    ?: preferences[KEY_GUEST_CREATE_BUTTON]
+                        ?.takeIf { it.isNotBlank() && it.endsWith("_create") }
+                        ?.let { it.removeSuffix("_create") + "_delete" },
                 guestQrImageEntityId = preferences[KEY_GUEST_QR_IMAGE]?.takeIf { it.isNotBlank() }
             )
         }
@@ -56,6 +60,7 @@ class SettingsRepository(
             preferences[KEY_RTSP_PORT] = settings.rtspPort.coerceIn(1024, 65535)
             preferences[KEY_GUEST_VOUCHER_SENSOR] = settings.guestVoucherSensorEntityId?.trim().orEmpty()
             preferences[KEY_GUEST_CREATE_BUTTON] = settings.guestCreateButtonEntityId?.trim().orEmpty()
+            preferences[KEY_GUEST_DELETE_BUTTON] = settings.guestDeleteButtonEntityId?.trim().orEmpty()
             preferences[KEY_GUEST_QR_IMAGE] = settings.guestQrImageEntityId?.trim().orEmpty()
         }
     }
@@ -73,6 +78,7 @@ class SettingsRepository(
             preferences.remove(KEY_RTSP_PORT)
             preferences.remove(KEY_GUEST_VOUCHER_SENSOR)
             preferences.remove(KEY_GUEST_CREATE_BUTTON)
+            preferences.remove(KEY_GUEST_DELETE_BUTTON)
             preferences.remove(KEY_GUEST_QR_IMAGE)
         }
     }
@@ -89,6 +95,7 @@ class SettingsRepository(
         private val KEY_RTSP_PORT = intPreferencesKey("rtsp_port")
         private val KEY_GUEST_VOUCHER_SENSOR = stringPreferencesKey("guest_voucher_sensor")
         private val KEY_GUEST_CREATE_BUTTON = stringPreferencesKey("guest_create_button")
+        private val KEY_GUEST_DELETE_BUTTON = stringPreferencesKey("guest_delete_button")
         private val KEY_GUEST_QR_IMAGE = stringPreferencesKey("guest_qr_image")
     }
 }

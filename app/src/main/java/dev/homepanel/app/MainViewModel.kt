@@ -268,6 +268,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             rtspPort = draft.rtspPort.coerceIn(1024, 65535),
             guestVoucherSensorEntityId = draft.guestVoucherSensorEntityId?.trim()?.takeIf { it.isNotBlank() },
             guestCreateButtonEntityId = draft.guestCreateButtonEntityId?.trim()?.takeIf { it.isNotBlank() },
+            guestDeleteButtonEntityId = draft.guestDeleteButtonEntityId?.trim()?.takeIf { it.isNotBlank() },
             guestQrImageEntityId = draft.guestQrImageEntityId?.trim()?.takeIf { it.isNotBlank() }
         )
 
@@ -319,6 +320,15 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun createGuestVoucher() {
         userActivity()
         socketClient.createGuestVoucher()
+        viewModelScope.launch {
+            delay(1_500L)
+            refreshGuestQr(showSpinner = false)
+        }
+    }
+
+    fun deleteGuestVoucher() {
+        userActivity()
+        socketClient.deleteGuestVoucher()
         viewModelScope.launch {
             delay(1_500L)
             refreshGuestQr(showSpinner = false)
@@ -421,7 +431,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             entityId = settings.alarmEntityId,
             wakeEntityId = settings.wakeEntityId,
             guestVoucherSensorEntityId = settings.guestVoucherSensorEntityId,
-            guestCreateButtonEntityId = settings.guestCreateButtonEntityId
+            guestCreateButtonEntityId = settings.guestCreateButtonEntityId,
+            guestDeleteButtonEntityId = settings.guestDeleteButtonEntityId
         )
     }
 

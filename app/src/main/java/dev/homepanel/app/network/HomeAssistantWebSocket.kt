@@ -22,6 +22,7 @@ class HomeAssistantWebSocket(
     private val nextId = AtomicInteger(1)
     private val actionRequestIds = ConcurrentHashMap<Int, AlarmAction>()
     private val guestVoucherRequestIds = ConcurrentHashMap.newKeySet<Int>()
+    private val guestVoucherDeleteRequestIds = ConcurrentHashMap.newKeySet<Int>()
 
     private val _state = MutableStateFlow(HomeAssistantConnectionState())
     val state: StateFlow<HomeAssistantConnectionState> = _state.asStateFlow()
@@ -35,6 +36,7 @@ class HomeAssistantWebSocket(
     private var wakeEntityId: String? = null
     private var guestVoucherSensorEntityId: String? = null
     private var guestCreateButtonEntityId: String? = null
+    private var guestDeleteButtonEntityId: String? = null
     private var getStatesRequestId: Int? = null
 
     fun connect(
@@ -43,7 +45,8 @@ class HomeAssistantWebSocket(
         entityId: String,
         wakeEntityId: String? = null,
         guestVoucherSensorEntityId: String? = null,
-        guestCreateButtonEntityId: String? = null
+        guestCreateButtonEntityId: String? = null,
+        guestDeleteButtonEntityId: String? = null
     ) {
         disconnect()
         accessToken = token.trim()
@@ -51,6 +54,7 @@ class HomeAssistantWebSocket(
         this.wakeEntityId = wakeEntityId?.trim()?.takeIf { it.isNotBlank() }
         this.guestVoucherSensorEntityId = guestVoucherSensorEntityId?.trim()?.takeIf { it.isNotBlank() }
         this.guestCreateButtonEntityId = guestCreateButtonEntityId?.trim()?.takeIf { it.isNotBlank() }
+        this.guestDeleteButtonEntityId = guestDeleteButtonEntityId?.trim()?.takeIf { it.isNotBlank() }
         _state.value = HomeAssistantConnectionState(status = ConnectionStatus.CONNECTING)
 
         val request = Request.Builder()
@@ -67,6 +71,7 @@ class HomeAssistantWebSocket(
         getStatesRequestId = null
         actionRequestIds.clear()
         guestVoucherRequestIds.clear()
+        guestVoucherDeleteRequestIds.clear()
         _state.value = HomeAssistantConnectionState(status = ConnectionStatus.DISCONNECTED)
     }
 
@@ -142,6 +147,38 @@ class HomeAssistantWebSocket(
         }
     }
 
+
+    fun deleteGuestVoucher() {
+        val socket = authenticatedSocket(guestAction = true) ?: return
+        val deleteButton = guestDeleteButtonEntityId
+        if (deleteButton.isNullOrBlank()) {
+            _state.value = _state.value.copy(guestErrorMessage = "No UniFi voucher delete button is configured")
+            return
+        }
+
+        val requestId = nextId.getAndIncrement()
+        guestVoucherDeleteRequestIds += requestId
+        val payload = JSONObject()
+            .put("id", requestId)
+            .put("type", "call_service")
+            .put("domain", "button")
+            .put("service", "press")
+            .put("target", JSONObject().put("entity_id", deleteButton))
+
+        _state.value = _state.value.copy(
+            pendingGuestVoucherDelete = true,
+            guestErrorMessage = null
+        )
+
+        if (!socket.send(payload.toString())) {
+            guestVoucherDeleteRequestIds.remove(requestId)
+            _state.value = _state.value.copy(
+                pendingGuestVoucherDelete = false,
+                guestErrorMessage = "Could not delete the guest voucher"
+            )
+        }
+    }
+
     private fun authenticatedSocket(guestAction: Boolean = false): WebSocket? {
         val socket = webSocket
         if (socket == null) {
@@ -176,7 +213,8 @@ class HomeAssistantWebSocket(
                     _state.value = _state.value.copy(
                         errorMessage = error.message ?: "Invalid message from Home Assistant",
                         pendingAction = null,
-                        pendingGuestVoucher = false
+                        pendingGuestVoucher = false,
+                        pendingGuestVoucherDelete = false
                     )
                 }
         }
@@ -192,7 +230,8 @@ class HomeAssistantWebSocket(
             _state.value = _state.value.copy(
                 status = ConnectionStatus.DISCONNECTED,
                 pendingAction = null,
-                pendingGuestVoucher = false
+                pendingGuestVoucher = false,
+                pendingGuestVoucherDelete = false
             )
         }
 
@@ -203,7 +242,8 @@ class HomeAssistantWebSocket(
                 status = ConnectionStatus.ERROR,
                 errorMessage = t.message ?: "WebSocket connection failed",
                 pendingAction = null,
-                pendingGuestVoucher = false
+                pendingGuestVoucher = false,
+                pendingGuestVoucherDelete = false
             )
         }
     }
@@ -217,7 +257,8 @@ class HomeAssistantWebSocket(
                     status = ConnectionStatus.ERROR,
                     errorMessage = message.optString("message", "Invalid Home Assistant token"),
                     pendingAction = null,
-                    pendingGuestVoucher = false
+                    pendingGuestVoucher = false,
+                    pendingGuestVoucherDelete = false
                 )
                 this@HomeAssistantWebSocket.webSocket = null
                 socket.close(1008, "Authentication failed")
@@ -309,6 +350,21 @@ class HomeAssistantWebSocket(
                     guestErrorMessage = extractError(message, "Guest voucher creation failed")
                 )
             }
+            return
+        }
+
+        if (guestVoucherDeleteRequestIds.remove(requestId)) {
+            if (message.optBoolean("success", false)) {
+                _state.value = _state.value.copy(
+                    pendingGuestVoucherDelete = false,
+                    guestErrorMessage = null
+                )
+            } else {
+                _state.value = _state.value.copy(
+                    pendingGuestVoucherDelete = false,
+                    guestErrorMessage = extractError(message, "Guest voucher deletion failed")
+                )
+            }
         }
     }
 
@@ -327,6 +383,7 @@ class HomeAssistantWebSocket(
             _state.value = _state.value.copy(
                 guestVoucher = parseGuestVoucherState(newState),
                 pendingGuestVoucher = false,
+                pendingGuestVoucherDelete = false,
                 guestErrorMessage = null
             )
         }

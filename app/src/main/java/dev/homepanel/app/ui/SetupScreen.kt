@@ -1,5 +1,8 @@
 package dev.homepanel.app.ui
 
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Context
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -30,6 +33,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.KeyboardType
@@ -37,12 +41,14 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import dev.homepanel.app.DiscoveryState
 import dev.homepanel.app.R
+import dev.homepanel.app.camera.RtspCameraState
 import dev.homepanel.app.data.PanelSettings
 
 @Composable
 fun SetupScreen(
     initialSettings: PanelSettings?,
     discoveryState: DiscoveryState,
+    rtspCameraState: RtspCameraState,
     canCancel: Boolean,
     onDiscover: (String, String) -> Unit,
     onSave: (PanelSettings) -> Unit,
@@ -82,6 +88,9 @@ fun SetupScreen(
     var guestCreateButton by rememberSaveable(initialSettings?.guestCreateButtonEntityId) {
         mutableStateOf(initialSettings?.guestCreateButtonEntityId.orEmpty())
     }
+    var guestDeleteButton by rememberSaveable(initialSettings?.guestDeleteButtonEntityId) {
+        mutableStateOf(initialSettings?.guestDeleteButtonEntityId.orEmpty())
+    }
     var guestQrImage by rememberSaveable(initialSettings?.guestQrImageEntityId) {
         mutableStateOf(initialSettings?.guestQrImageEntityId.orEmpty())
     }
@@ -91,9 +100,13 @@ fun SetupScreen(
             val guest = discoveryState.guestWifi.single()
             guestVoucherSensor = guest.voucherSensorEntityId
             guestCreateButton = guest.createButtonEntityId
+            guestDeleteButton = guest.deleteButtonEntityId.orEmpty()
             guestQrImage = guest.qrImageEntityId.orEmpty()
         }
     }
+
+    val context = LocalContext.current
+    var rtspCopied by rememberSaveable { mutableStateOf(false) }
 
     BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
         val horizontalPadding = if (maxWidth < 600.dp) 16.dp else 32.dp
@@ -227,6 +240,7 @@ fun SetupScreen(
                         .clickable {
                             guestVoucherSensor = ""
                             guestCreateButton = ""
+                            guestDeleteButton = ""
                             guestQrImage = ""
                         }
                 ) {
@@ -239,6 +253,7 @@ fun SetupScreen(
                             onClick = {
                                 guestVoucherSensor = ""
                                 guestCreateButton = ""
+                                guestDeleteButton = ""
                                 guestQrImage = ""
                             }
                         )
@@ -253,6 +268,7 @@ fun SetupScreen(
                             .clickable {
                                 guestVoucherSensor = guest.voucherSensorEntityId
                                 guestCreateButton = guest.createButtonEntityId
+                                guestDeleteButton = guest.deleteButtonEntityId.orEmpty()
                                 guestQrImage = guest.qrImageEntityId.orEmpty()
                             }
                     ) {
@@ -266,6 +282,7 @@ fun SetupScreen(
                                 onClick = {
                                     guestVoucherSensor = guest.voucherSensorEntityId
                                     guestCreateButton = guest.createButtonEntityId
+                                    guestDeleteButton = guest.deleteButtonEntityId.orEmpty()
                                     guestQrImage = guest.qrImageEntityId.orEmpty()
                                 }
                             )
@@ -379,6 +396,48 @@ fun SetupScreen(
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                         singleLine = true
                     )
+
+                    Card(modifier = Modifier.fillMaxWidth()) {
+                        Column(
+                            modifier = Modifier.padding(14.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Text(stringResource(R.string.rtsp_endpoint), style = MaterialTheme.typography.titleSmall)
+                            val endpoint = rtspCameraState.endpoint
+                            when {
+                                rtspCameraState.permissionRequired -> Text(
+                                    stringResource(R.string.rtsp_permission_needed),
+                                    color = MaterialTheme.colorScheme.error
+                                )
+                                !rtspCameraState.errorMessage.isNullOrBlank() -> Text(
+                                    rtspCameraState.errorMessage.orEmpty(),
+                                    color = MaterialTheme.colorScheme.error
+                                )
+                                !endpoint.isNullOrBlank() -> {
+                                    Text(endpoint, style = MaterialTheme.typography.bodyMedium)
+                                    Text(
+                                        stringResource(R.string.rtsp_clients, rtspCameraState.clientCount),
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                    OutlinedButton(
+                                        onClick = {
+                                            val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                                            clipboard.setPrimaryClip(ClipData.newPlainText("HomePanel RTSP", endpoint))
+                                            rtspCopied = true
+                                        }
+                                    ) {
+                                        Text(if (rtspCopied) stringResource(R.string.rtsp_copied) else stringResource(R.string.rtsp_copy))
+                                    }
+                                }
+                                else -> Text(
+                                    stringResource(R.string.rtsp_save_to_start),
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
+                    }
                 }
 
                 HorizontalDivider()
@@ -434,6 +493,7 @@ fun SetupScreen(
                                     rtspPort = rtspPort.toIntOrNull() ?: 8554,
                                     guestVoucherSensorEntityId = guestVoucherSensor.takeIf { it.isNotBlank() },
                                     guestCreateButtonEntityId = guestCreateButton.takeIf { it.isNotBlank() },
+                                    guestDeleteButtonEntityId = guestDeleteButton.takeIf { it.isNotBlank() },
                                     guestQrImageEntityId = guestQrImage.takeIf { it.isNotBlank() }
                                 )
                             )

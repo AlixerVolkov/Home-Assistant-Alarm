@@ -73,6 +73,7 @@ class HomeAssistantRestClient(
                 val createButton = "button.${configKey}_create"
                 if (!stateByEntityId.containsKey(createButton)) return@mapNotNull null
 
+                val deleteCandidate = "button.${configKey}_delete"
                 val qrCandidate = "image.${configKey}_qr_code"
                 val attributes = item.optJSONObject("attributes")
                 val wlanName = attributes?.optString("wlan_name")
@@ -83,6 +84,7 @@ class HomeAssistantRestClient(
                     displayName = name,
                     voucherSensorEntityId = entityId,
                     createButtonEntityId = createButton,
+                    deleteButtonEntityId = deleteCandidate.takeIf(stateByEntityId::containsKey),
                     // Keep the predictable entity id even when the image entity is disabled in HA.
                     // This lets the UI explain exactly which entity needs enabling.
                     qrImageEntityId = qrCandidate,

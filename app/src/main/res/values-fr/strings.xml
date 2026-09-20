@@ -12,7 +12,7 @@
     <string name="display_title">Économiseur d’écran et veille</string><string name="display_subtitle">Définissez les délais d’inactivité. L’économiseur affiche l’heure, la météo et l’alarme ; la veille assombrit presque totalement l’écran tout en restant connectée.</string><string name="screensaver_minutes">Économiseur après (min)</string><string name="sleep_minutes">Veille après (min)</string><string name="zero_disables">0 = désactivé</string><string name="sleep_explanation">La veille reste connectée afin que les mouvements ou événements Alarmo puissent réveiller le panneau. Une alarme déclenchée ou en attente le réveille également.</string><string name="tap_to_wake">Touchez pour réveiller</string>
 
     <string name="guest_wifi_setup_title">Bons Wi-Fi invités</string>
-    <string name="guest_wifi_setup_subtitle">HomePanel peut détecter UniFi Hotspot Manager et proposer aux visiteurs un bouton pour créer un bon puis afficher son code et son QR.</string>
+    <string name="guest_wifi_setup_subtitle">HomePanel peut détecter UniFi Hotspot Manager afin que les visiteurs puissent créer ou supprimer un bon et voir son code et son QR.</string>
     <string name="guest_wifi_none">Bouton Wi-Fi invité désactivé</string>
     <string name="guest_wifi_qr_hint">Entité QR : %1$s (activez-la dans Home Assistant si elle est désactivée)</string>
     <string name="guest_wifi_not_found">Aucune entité de bon UniFi Hotspot Manager détectée. Relancez la détection après avoir configuré l’intégration dans Home Assistant.</string>
@@ -28,6 +28,10 @@
     <string name="rtsp_running">Caméra RTSP active</string>
     <string name="rtsp_starting">Démarrage de la caméra RTSP…</string>
     <string name="rtsp_clients">%1$d client(s)</string>
+    <string name="rtsp_endpoint">Adresse RTSP</string>
+    <string name="rtsp_copy">Copier l’adresse RTSP</string>
+    <string name="rtsp_copied">Copié dans le presse-papiers</string>
+    <string name="rtsp_save_to_start">Enregistrez la configuration pour démarrer le serveur RTSP et afficher son adresse.</string>
     <string name="guest_wifi_title">Wi-Fi invités</string>
     <string name="guest_wifi_creating">Création du bon…</string>
     <string name="guest_wifi_voucher_ready">Bon prêt · touchez pour l’afficher</string>
@@ -40,5 +44,9 @@
     <string name="guest_wifi_duration">Durée : %1$s</string>
     <string name="guest_wifi_status">Statut : %1$s</string>
     <string name="guest_wifi_create">Créer un nouveau bon</string>
+    <string name="guest_wifi_deleting">Suppression du bon…</string>
+    <string name="guest_wifi_delete">Supprimer le bon</string>
+    <string name="guest_wifi_delete_confirm_title">Supprimer ce bon ?</string>
+    <string name="guest_wifi_delete_confirm_message">Le bon %1$s sera supprimé de UniFi. Cette action est irréversible.</string>
     <string name="close">Fermer</string>
 </resources>

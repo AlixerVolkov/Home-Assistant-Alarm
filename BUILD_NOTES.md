@@ -1,16 +1,13 @@
-# Build notes v0.4.1
+# Build notes - HomePanel v0.4.2
 
-The GitHub Actions failure in v0.4.0 was a Kotlin type mismatch in `HomeAssistantRestClient.kt`: two calls passed OkHttp `HttpUrl` values into a helper declared with `String`. The helper now accepts `HttpUrl`.
+- `applicationId`: `dev.homepanel.app`
+- `versionCode`: `8`
+- `versionName`: `0.4.2`
+- Release task: `:app:assembleRelease`
+- Expected artifact: `HomePanel-v0.4.2.apk`
+- Uses the existing persistent GitHub Actions signing secrets.
 
-This environment does not contain a complete Android SDK/Gradle toolchain, so the final `assembleRelease` verification is performed by the repository GitHub Actions workflow.
-
-# Build notes — HomePanel v0.4.0
-
-El workflow incluido compila `:app:assembleRelease` con JDK 17, Gradle 9.6, AGP 9.4 y Android SDK 37.0, restaura la misma clave release desde GitHub Secrets y verifica el APK con `apksigner`.
-
-Nuevas dependencias JitPack:
-
-- `com.github.pedroSG94:RTSP-Server:1.4.2`
-- `com.github.pedroSG94.RootEncoder:library:2.8.0`
-
-El contenedor usado para preparar este paquete no dispone del Android SDK/Gradle completo con acceso a repositorios, por lo que la compilación Android final debe validarse con el workflow de GitHub Actions incluido.
+Changes in this build:
+- UniFi voucher delete button support.
+- RTSP status removed from the main dashboard.
+- RTSP endpoint and clipboard copy action moved to Settings.

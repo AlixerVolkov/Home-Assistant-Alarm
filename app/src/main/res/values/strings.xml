@@ -71,7 +71,7 @@
     <string name="tap_to_wake">Touch to wake</string>
 
     <string name="guest_wifi_setup_title">Guest Wi-Fi vouchers</string>
-    <string name="guest_wifi_setup_subtitle">HomePanel can detect UniFi Hotspot Manager and give visitors a button to create a voucher, then show its code and QR.</string>
+    <string name="guest_wifi_setup_subtitle">HomePanel can detect UniFi Hotspot Manager so visitors can create or delete a voucher and see its code and QR.</string>
     <string name="guest_wifi_none">Guest Wi-Fi button disabled</string>
     <string name="guest_wifi_qr_hint">QR entity: %1$s (enable it in Home Assistant if it is disabled)</string>
     <string name="guest_wifi_not_found">No UniFi Hotspot Manager voucher entities were detected. Run discovery after configuring the integration in Home Assistant.</string>
@@ -87,6 +87,10 @@
     <string name="rtsp_running">RTSP camera running</string>
     <string name="rtsp_starting">Starting RTSP camera…</string>
     <string name="rtsp_clients">%1$d client(s)</string>
+    <string name="rtsp_endpoint">RTSP address</string>
+    <string name="rtsp_copy">Copy RTSP address</string>
+    <string name="rtsp_copied">Copied to clipboard</string>
+    <string name="rtsp_save_to_start">Save the configuration to start the RTSP server and show its address.</string>
     <string name="guest_wifi_title">Guest Wi-Fi</string>
     <string name="guest_wifi_creating">Creating voucher…</string>
     <string name="guest_wifi_voucher_ready">Voucher ready · tap to show</string>
@@ -99,5 +103,9 @@
     <string name="guest_wifi_duration">Duration: %1$s</string>
     <string name="guest_wifi_status">Status: %1$s</string>
     <string name="guest_wifi_create">Create new voucher</string>
+    <string name="guest_wifi_deleting">Deleting voucher…</string>
+    <string name="guest_wifi_delete">Delete voucher</string>
+    <string name="guest_wifi_delete_confirm_title">Delete this voucher?</string>
+    <string name="guest_wifi_delete_confirm_message">Voucher %1$s will be deleted from UniFi. This cannot be undone.</string>
     <string name="close">Close</string>
 </resources>

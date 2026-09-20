@@ -28,6 +28,7 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilledTonalButton
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
@@ -52,7 +53,6 @@ import androidx.compose.ui.unit.dp
 import dev.homepanel.app.GuestWifiUiState
 import dev.homepanel.app.R
 import dev.homepanel.app.WeatherUiState
-import dev.homepanel.app.camera.RtspCameraState
 import dev.homepanel.app.data.PanelSettings
 import dev.homepanel.app.network.AlarmAction
 import dev.homepanel.app.network.AlarmEntityState
@@ -75,9 +75,9 @@ fun AlarmScreen(
     connectionState: HomeAssistantConnectionState,
     weatherState: WeatherUiState,
     guestWifiState: GuestWifiUiState,
-    rtspCameraState: RtspCameraState,
     onAction: (AlarmAction, String?) -> Unit,
     onCreateGuestVoucher: () -> Unit,
+    onDeleteGuestVoucher: () -> Unit,
     onRefreshGuestQr: () -> Unit,
     onReconnect: () -> Unit,
     onRefreshWeather: () -> Unit,
@@ -109,7 +109,6 @@ fun AlarmScreen(
                     connectionState = connectionState,
                     weatherState = weatherState,
                     compact = true,
-                    rtspCameraState = rtspCameraState,
                     onReconnect = onReconnect,
                     onRefreshWeather = onRefreshWeather,
                     onSettings = onSettings
@@ -119,6 +118,7 @@ fun AlarmScreen(
                     GuestWifiEntryCard(
                         voucher = connectionState.guestVoucher,
                         pending = connectionState.pendingGuestVoucher,
+                        deleting = connectionState.pendingGuestVoucherDelete,
                         onClick = { showGuestWifi = true }
                     )
                 }
@@ -147,7 +147,6 @@ fun AlarmScreen(
                     connectionState = connectionState,
                     weatherState = weatherState,
                     compact = false,
-                    rtspCameraState = rtspCameraState,
                     onReconnect = onReconnect,
                     onRefreshWeather = onRefreshWeather,
                     onSettings = onSettings
@@ -157,6 +156,7 @@ fun AlarmScreen(
                     GuestWifiEntryCard(
                         voucher = connectionState.guestVoucher,
                         pending = connectionState.pendingGuestVoucher,
+                        deleting = connectionState.pendingGuestVoucherDelete,
                         onClick = { showGuestWifi = true }
                     )
                 }
@@ -194,9 +194,12 @@ fun AlarmScreen(
             voucher = connectionState.guestVoucher,
             guestWifiState = guestWifiState,
             pending = connectionState.pendingGuestVoucher,
+            deleting = connectionState.pendingGuestVoucherDelete,
             errorMessage = connectionState.guestErrorMessage,
             qrEntityId = settings.guestQrImageEntityId,
+            canDelete = !settings.guestDeleteButtonEntityId.isNullOrBlank(),
             onCreate = onCreateGuestVoucher,
+            onDelete = onDeleteGuestVoucher,
             onRefreshQr = onRefreshGuestQr,
             onDismiss = { showGuestWifi = false }
         )
@@ -228,7 +231,6 @@ private fun DashboardHeader(
     connectionState: HomeAssistantConnectionState,
     weatherState: WeatherUiState,
     compact: Boolean,
-    rtspCameraState: RtspCameraState,
     onReconnect: () -> Unit,
     onRefreshWeather: () -> Unit,
     onSettings: () -> Unit
@@ -258,9 +260,6 @@ private fun DashboardHeader(
                 modifier = Modifier.fillMaxWidth(),
                 onRefresh = onRefreshWeather
             )
-            if (rtspCameraState.enabled) {
-                RtspStatusChip(rtspCameraState, modifier = Modifier.fillMaxWidth())
-            }
         }
     } else {
         Row(
@@ -283,9 +282,6 @@ private fun DashboardHeader(
                 modifier = Modifier.weight(1.25f),
                 onRefresh = onRefreshWeather
             )
-            if (rtspCameraState.enabled) {
-                RtspStatusChip(rtspCameraState, modifier = Modifier.weight(0.95f))
-            }
             IconButton(onClick = onSettings) {
                 Text("⚙️", style = MaterialTheme.typography.headlineMedium)
             }
@@ -313,36 +309,10 @@ private fun ConnectionChip(status: ConnectionStatus, onReconnect: () -> Unit) {
 }
 
 @Composable
-private fun RtspStatusChip(state: RtspCameraState, modifier: Modifier = Modifier) {
-    val label = when {
-        state.permissionRequired -> stringResource(R.string.rtsp_permission_needed)
-        state.running -> state.endpoint ?: stringResource(R.string.rtsp_running)
-        !state.errorMessage.isNullOrBlank() -> state.errorMessage
-        else -> stringResource(R.string.rtsp_starting)
-    }
-    Surface(
-        modifier = modifier,
-        shape = MaterialTheme.shapes.large,
-        color = if (state.running) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.surfaceVariant
-    ) {
-        Column(modifier = Modifier.padding(horizontal = 10.dp, vertical = 7.dp)) {
-            Text("📷 RTSP", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold)
-            Text(label.orEmpty(), style = MaterialTheme.typography.labelSmall, maxLines = 2)
-            if (state.running) {
-                Text(
-                    stringResource(R.string.rtsp_clients, state.clientCount),
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-        }
-    }
-}
-
-@Composable
 private fun GuestWifiEntryCard(
     voucher: GuestVoucherState?,
     pending: Boolean,
+    deleting: Boolean,
     onClick: () -> Unit
 ) {
     Card(
@@ -364,6 +334,7 @@ private fun GuestWifiEntryCard(
                     fontWeight = FontWeight.SemiBold
                 )
                 val detail = when {
+                    deleting -> stringResource(R.string.guest_wifi_deleting)
                     pending -> stringResource(R.string.guest_wifi_creating)
                     !voucher?.wlanName.isNullOrBlank() -> voucher?.wlanName.orEmpty()
                     !voucher?.code.isNullOrBlank() -> stringResource(R.string.guest_wifi_voucher_ready)
@@ -381,9 +352,12 @@ private fun GuestWifiDialog(
     voucher: GuestVoucherState?,
     guestWifiState: GuestWifiUiState,
     pending: Boolean,
+    deleting: Boolean,
     errorMessage: String?,
     qrEntityId: String?,
+    canDelete: Boolean,
     onCreate: () -> Unit,
+    onDelete: () -> Unit,
     onRefreshQr: () -> Unit,
     onDismiss: () -> Unit
 ) {
@@ -392,9 +366,11 @@ private fun GuestWifiDialog(
             runCatching { BitmapFactory.decodeByteArray(bytes, 0, bytes.size)?.asImageBitmap() }.getOrNull()
         }
     }
+    var confirmDelete by remember { mutableStateOf(false) }
+    val busy = pending || deleting
 
     AlertDialog(
-        onDismissRequest = onDismiss,
+        onDismissRequest = { if (!busy) onDismiss() },
         title = { Text("📶 ${stringResource(R.string.guest_wifi_title)}") },
         text = {
             Column(
@@ -468,18 +444,50 @@ private fun GuestWifiDialog(
             }
         },
         confirmButton = {
-            Button(onClick = onCreate, enabled = !pending) {
-                if (pending) {
-                    CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
-                    Spacer(Modifier.width(8.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                if (canDelete && !voucher?.code.isNullOrBlank()) {
+                    OutlinedButton(onClick = { confirmDelete = true }, enabled = !busy) {
+                        if (deleting) {
+                            CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
+                            Spacer(Modifier.width(8.dp))
+                        }
+                        Text(if (deleting) stringResource(R.string.guest_wifi_deleting) else stringResource(R.string.guest_wifi_delete))
+                    }
                 }
-                Text(if (pending) stringResource(R.string.guest_wifi_creating) else stringResource(R.string.guest_wifi_create))
+                Button(onClick = onCreate, enabled = !busy) {
+                    if (pending) {
+                        CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
+                        Spacer(Modifier.width(8.dp))
+                    }
+                    Text(if (pending) stringResource(R.string.guest_wifi_creating) else stringResource(R.string.guest_wifi_create))
+                }
             }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) { Text(stringResource(R.string.close)) }
+            TextButton(onClick = onDismiss, enabled = !busy) { Text(stringResource(R.string.close)) }
         }
     )
+
+    if (confirmDelete) {
+        AlertDialog(
+            onDismissRequest = { confirmDelete = false },
+            title = { Text(stringResource(R.string.guest_wifi_delete_confirm_title)) },
+            text = { Text(stringResource(R.string.guest_wifi_delete_confirm_message, voucher?.code.orEmpty())) },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        confirmDelete = false
+                        onDelete()
+                    }
+                ) {
+                    Text(stringResource(R.string.guest_wifi_delete))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { confirmDelete = false }) { Text(stringResource(R.string.cancel)) }
+            }
+        )
+    }
 }
 
 @Composable

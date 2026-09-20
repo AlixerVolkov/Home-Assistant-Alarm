@@ -71,7 +71,7 @@
     <string name="tap_to_wake">Toca para despertar</string>
 
     <string name="guest_wifi_setup_title">Vales Wi-Fi para visitas</string>
-    <string name="guest_wifi_setup_subtitle">HomePanel puede detectar UniFi Hotspot Manager y ofrecer a las visitas un botón para crear un vale y mostrar su código y QR.</string>
+    <string name="guest_wifi_setup_subtitle">HomePanel puede detectar UniFi Hotspot Manager para que las visitas puedan crear o borrar un vale y ver su código y QR.</string>
     <string name="guest_wifi_none">Botón Wi-Fi de visitas desactivado</string>
     <string name="guest_wifi_qr_hint">Entidad QR: %1$s (actívala en Home Assistant si está deshabilitada)</string>
     <string name="guest_wifi_not_found">No se detectaron entidades de vales de UniFi Hotspot Manager. Ejecuta la detección después de configurar la integración en Home Assistant.</string>
@@ -87,6 +87,10 @@
     <string name="rtsp_running">Cámara RTSP activa</string>
     <string name="rtsp_starting">Iniciando cámara RTSP…</string>
     <string name="rtsp_clients">%1$d cliente(s)</string>
+    <string name="rtsp_endpoint">Dirección RTSP</string>
+    <string name="rtsp_copy">Copiar dirección RTSP</string>
+    <string name="rtsp_copied">Copiado al portapapeles</string>
+    <string name="rtsp_save_to_start">Guarda la configuración para iniciar el servidor RTSP y mostrar su dirección.</string>
     <string name="guest_wifi_title">Wi-Fi para visitas</string>
     <string name="guest_wifi_creating">Creando vale…</string>
     <string name="guest_wifi_voucher_ready">Vale listo · toca para mostrarlo</string>
@@ -99,5 +103,9 @@
     <string name="guest_wifi_duration">Duración: %1$s</string>
     <string name="guest_wifi_status">Estado: %1$s</string>
     <string name="guest_wifi_create">Crear nuevo vale</string>
+    <string name="guest_wifi_deleting">Borrando vale…</string>
+    <string name="guest_wifi_delete">Borrar vale</string>
+    <string name="guest_wifi_delete_confirm_title">¿Borrar este vale?</string>
+    <string name="guest_wifi_delete_confirm_message">El vale %1$s se borrará de UniFi. Esta acción no se puede deshacer.</string>
     <string name="close">Cerrar</string>
 </resources>

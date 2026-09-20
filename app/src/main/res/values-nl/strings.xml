@@ -17,7 +17,7 @@
     <string name="display_title">Screensaver en slaapstand</string><string name="display_subtitle">Stel de inactiviteitstijden in. De screensaver toont klok, weer en alarmstatus; de slaapstand dimt bijna volledig maar blijft verbonden.</string><string name="screensaver_minutes">Screensaver na (min)</string><string name="sleep_minutes">Slaapstand na (min)</string><string name="zero_disables">0 = uitgeschakeld</string><string name="sleep_explanation">De slaapstand blijft verbonden zodat beweging of Alarmo-gebeurtenissen het paneel betrouwbaar kunnen wekken. Een actief of wachtend alarm wekt het paneel ook.</string><string name="tap_to_wake">Tik om te wekken</string>
 
     <string name="guest_wifi_setup_title">Gast-Wi-Fi vouchers</string>
-    <string name="guest_wifi_setup_subtitle">HomePanel kan UniFi Hotspot Manager detecteren en bezoekers een knop geven om een voucher te maken en de code en QR te tonen.</string>
+    <string name="guest_wifi_setup_subtitle">HomePanel kan UniFi Hotspot Manager detecteren zodat bezoekers een voucher kunnen maken of verwijderen en de code en QR kunnen zien.</string>
     <string name="guest_wifi_none">Gast-Wi-Fi knop uitgeschakeld</string>
     <string name="guest_wifi_qr_hint">QR-entiteit: %1$s (schakel deze in Home Assistant in als hij uitgeschakeld is)</string>
     <string name="guest_wifi_not_found">Geen voucher-entiteiten van UniFi Hotspot Manager gevonden. Voer detectie opnieuw uit nadat de integratie in Home Assistant is ingesteld.</string>
@@ -33,6 +33,10 @@
     <string name="rtsp_running">RTSP-camera actief</string>
     <string name="rtsp_starting">RTSP-camera starten…</string>
     <string name="rtsp_clients">%1$d client(s)</string>
+    <string name="rtsp_endpoint">RTSP-adres</string>
+    <string name="rtsp_copy">RTSP-adres kopiëren</string>
+    <string name="rtsp_copied">Gekopieerd naar klembord</string>
+    <string name="rtsp_save_to_start">Sla de configuratie op om de RTSP-server te starten en het adres te tonen.</string>
     <string name="guest_wifi_title">Gast-Wi-Fi</string>
     <string name="guest_wifi_creating">Voucher maken…</string>
     <string name="guest_wifi_voucher_ready">Voucher klaar · tik om te tonen</string>
@@ -45,5 +49,9 @@
     <string name="guest_wifi_duration">Duur: %1$s</string>
     <string name="guest_wifi_status">Status: %1$s</string>
     <string name="guest_wifi_create">Nieuwe voucher maken</string>
+    <string name="guest_wifi_deleting">Voucher verwijderen…</string>
+    <string name="guest_wifi_delete">Voucher verwijderen</string>
+    <string name="guest_wifi_delete_confirm_title">Deze voucher verwijderen?</string>
+    <string name="guest_wifi_delete_confirm_message">Voucher %1$s wordt uit UniFi verwijderd. Dit kan niet ongedaan worden gemaakt.</string>
     <string name="close">Sluiten</string>
 </resources>
