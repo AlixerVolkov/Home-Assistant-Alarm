@@ -68,6 +68,7 @@ fun SetupScreen(
 
     BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
         val horizontalPadding = if (maxWidth < 600.dp) 16.dp else 32.dp
+        val compactDisplaySettings = maxWidth < 520.dp
 
         Column(
             modifier = Modifier
@@ -252,7 +253,7 @@ fun SetupScreen(
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
 
-                if (maxWidth < 520.dp) {
+                if (compactDisplaySettings) {
                     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                         OutlinedTextField(
                             value = saverMinutes,

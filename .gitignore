@@ -8,3 +8,7 @@ build/
 captures/
 .externalNativeBuild/
 .cxx/
+*.jks
+*.keystore
+*.p12
+*.base64.txt

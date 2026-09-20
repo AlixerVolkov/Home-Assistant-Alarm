@@ -1,8 +1,8 @@
-# HomePanel v0.3.0
+# HomePanel v0.3.1
 
 A modern Android wall panel for Home Assistant / Alarmo.
 
-## v0.3.0 highlights
+## v0.3.1 highlights
 
 - Home Assistant WebSocket alarm control with live state updates.
 - Automatic device language (English, Spanish, Dutch and French resources included).
@@ -32,7 +32,7 @@ Existing v0.2.x settings are migrated automatically. The new wake sensor remains
 
 Push the project to `main`. The included workflow builds the debug APK. Download the artifact named:
 
-`HomePanel-v0.3.0-debug-apk`
+`HomePanel-v0.3.1-debug-apk`
 
 The APK inside the artifact is `app-debug.apk`.
 
@@ -43,4 +43,8 @@ HomePanel deliberately uses a low-power in-app sleep mode instead of fully power
 ## Security
 
 The access token is stored encrypted with Android Keystore. Prefer HTTPS/WSS for Home Assistant.
-OK
+
+
+## Firma y actualizaciones
+
+Para generar APKs que puedan actualizar versiones anteriores sin perder datos, configura una firma estable siguiendo `SIGNING_WINDOWS.md`.
