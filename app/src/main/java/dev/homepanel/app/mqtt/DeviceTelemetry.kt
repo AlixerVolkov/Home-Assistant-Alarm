@@ -10,6 +10,7 @@ data class DeviceTelemetry(
     val batteryTemperatureC: Double? = null,
     val charging: Boolean? = null,
     val proximityNear: Boolean? = null,
+    val ambientLightLux: Float? = null,
     val displayMode: String = "active",
     val rtspRunning: Boolean = false,
     val rtspClients: Int = 0,
@@ -19,6 +20,7 @@ data class DeviceTelemetry(
 class DeviceTelemetryReader(private val context: Context) {
     fun read(
         proximityNear: Boolean?,
+        ambientLightLux: Float?,
         displayMode: String,
         rtspRunning: Boolean,
         rtspClients: Int,
@@ -40,6 +42,7 @@ class DeviceTelemetryReader(private val context: Context) {
             batteryTemperatureC = temperature,
             charging = charging,
             proximityNear = proximityNear,
+            ambientLightLux = ambientLightLux,
             displayMode = displayMode,
             rtspRunning = rtspRunning,
             rtspClients = rtspClients,

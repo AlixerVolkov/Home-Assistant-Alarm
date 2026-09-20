@@ -34,8 +34,16 @@ class SettingsRepository(
                 screensaverTimeoutMinutes = preferences[KEY_SCREENSAVER_MINUTES] ?: 2,
                 sleepTimeoutMinutes = preferences[KEY_SLEEP_MINUTES] ?: 10,
                 proximityWakeEnabled = preferences[KEY_PROXIMITY_WAKE] ?: true,
+                autoBrightnessEnabled = preferences[KEY_AUTO_BRIGHTNESS] ?: true,
+                kioskModeEnabled = preferences[KEY_KIOSK_MODE] ?: false,
+                settingsPin = preferences[KEY_SETTINGS_PIN]
+                    ?.takeIf { it.isNotBlank() }
+                    ?.let { runCatching { cryptoManager.decrypt(it) }.getOrDefault("") }
+                    .orEmpty(),
+                updateChecksEnabled = preferences[KEY_UPDATE_CHECKS] ?: true,
                 rtspEnabled = preferences[KEY_RTSP_ENABLED] ?: false,
                 rtspPort = preferences[KEY_RTSP_PORT] ?: 8554,
+                rtspAdvertisedHost = preferences[KEY_RTSP_ADVERTISED_HOST].orEmpty(),
                 guestVoucherSensorEntityId = preferences[KEY_GUEST_VOUCHER_SENSOR]?.takeIf { it.isNotBlank() },
                 guestCreateButtonEntityId = preferences[KEY_GUEST_CREATE_BUTTON]?.takeIf { it.isNotBlank() },
                 guestDeleteButtonEntityId = preferences[KEY_GUEST_DELETE_BUTTON]?.takeIf { it.isNotBlank() }
@@ -65,8 +73,17 @@ class SettingsRepository(
             preferences[KEY_SCREENSAVER_MINUTES] = settings.screensaverTimeoutMinutes.coerceAtLeast(0)
             preferences[KEY_SLEEP_MINUTES] = settings.sleepTimeoutMinutes.coerceAtLeast(0)
             preferences[KEY_PROXIMITY_WAKE] = settings.proximityWakeEnabled
+            preferences[KEY_AUTO_BRIGHTNESS] = settings.autoBrightnessEnabled
+            preferences[KEY_KIOSK_MODE] = settings.kioskModeEnabled
+            if (settings.settingsPin.isBlank()) {
+                preferences.remove(KEY_SETTINGS_PIN)
+            } else {
+                preferences[KEY_SETTINGS_PIN] = cryptoManager.encrypt(settings.settingsPin.trim())
+            }
+            preferences[KEY_UPDATE_CHECKS] = settings.updateChecksEnabled
             preferences[KEY_RTSP_ENABLED] = settings.rtspEnabled
             preferences[KEY_RTSP_PORT] = settings.rtspPort.coerceIn(1024, 65535)
+            preferences[KEY_RTSP_ADVERTISED_HOST] = settings.rtspAdvertisedHost.trim()
             preferences[KEY_GUEST_VOUCHER_SENSOR] = settings.guestVoucherSensorEntityId?.trim().orEmpty()
             preferences[KEY_GUEST_CREATE_BUTTON] = settings.guestCreateButtonEntityId?.trim().orEmpty()
             preferences[KEY_GUEST_DELETE_BUTTON] = settings.guestDeleteButtonEntityId?.trim().orEmpty()
@@ -93,8 +110,13 @@ class SettingsRepository(
             preferences.remove(KEY_SCREENSAVER_MINUTES)
             preferences.remove(KEY_SLEEP_MINUTES)
             preferences.remove(KEY_PROXIMITY_WAKE)
+            preferences.remove(KEY_AUTO_BRIGHTNESS)
+            preferences.remove(KEY_KIOSK_MODE)
+            preferences.remove(KEY_SETTINGS_PIN)
+            preferences.remove(KEY_UPDATE_CHECKS)
             preferences.remove(KEY_RTSP_ENABLED)
             preferences.remove(KEY_RTSP_PORT)
+            preferences.remove(KEY_RTSP_ADVERTISED_HOST)
             preferences.remove(KEY_GUEST_VOUCHER_SENSOR)
             preferences.remove(KEY_GUEST_CREATE_BUTTON)
             preferences.remove(KEY_GUEST_DELETE_BUTTON)
@@ -116,8 +138,13 @@ class SettingsRepository(
         private val KEY_SCREENSAVER_MINUTES = intPreferencesKey("screensaver_minutes")
         private val KEY_SLEEP_MINUTES = intPreferencesKey("sleep_minutes")
         private val KEY_PROXIMITY_WAKE = booleanPreferencesKey("proximity_wake")
+        private val KEY_AUTO_BRIGHTNESS = booleanPreferencesKey("auto_brightness")
+        private val KEY_KIOSK_MODE = booleanPreferencesKey("kiosk_mode")
+        private val KEY_SETTINGS_PIN = stringPreferencesKey("settings_pin")
+        private val KEY_UPDATE_CHECKS = booleanPreferencesKey("update_checks")
         private val KEY_RTSP_ENABLED = booleanPreferencesKey("rtsp_enabled")
         private val KEY_RTSP_PORT = intPreferencesKey("rtsp_port")
+        private val KEY_RTSP_ADVERTISED_HOST = stringPreferencesKey("rtsp_advertised_host")
         private val KEY_GUEST_VOUCHER_SENSOR = stringPreferencesKey("guest_voucher_sensor")
         private val KEY_GUEST_CREATE_BUTTON = stringPreferencesKey("guest_create_button")
         private val KEY_GUEST_DELETE_BUTTON = stringPreferencesKey("guest_delete_button")

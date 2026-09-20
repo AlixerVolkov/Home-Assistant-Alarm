@@ -117,3 +117,10 @@ data class HomeAssistantConnectionState(
     val pendingGuestVoucher: Boolean = false,
     val pendingGuestVoucherDelete: Boolean = false
 )
+
+data class HomeEntityEvent(
+    val entityId: String,
+    val friendlyName: String,
+    val state: String,
+    val deviceClass: String? = null
+)

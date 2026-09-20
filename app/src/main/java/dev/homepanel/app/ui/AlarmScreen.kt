@@ -1,5 +1,9 @@
 package dev.homepanel.app.ui
 
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Context
+import android.content.Intent
 import android.graphics.BitmapFactory
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.horizontalScroll
@@ -19,6 +23,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.sizeIn
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
@@ -42,6 +47,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
@@ -50,9 +56,13 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import dev.homepanel.app.GuestWifiUiState
+import dev.homepanel.app.HouseSummaryUiState
 import dev.homepanel.app.R
 import dev.homepanel.app.WeatherUiState
+import dev.homepanel.app.data.PanelEvent
 import dev.homepanel.app.data.PanelSettings
 import dev.homepanel.app.network.AlarmAction
 import dev.homepanel.app.network.AlarmEntityState
@@ -61,6 +71,7 @@ import dev.homepanel.app.network.ConnectionStatus
 import dev.homepanel.app.network.DailyForecast
 import dev.homepanel.app.network.HomeAssistantConnectionState
 import dev.homepanel.app.network.GuestVoucherState
+import java.time.Instant
 import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.ZoneId
@@ -75,17 +86,22 @@ fun AlarmScreen(
     connectionState: HomeAssistantConnectionState,
     weatherState: WeatherUiState,
     guestWifiState: GuestWifiUiState,
+    houseSummaryState: HouseSummaryUiState,
+    history: List<PanelEvent>,
     onAction: (AlarmAction, String?) -> Unit,
     onCreateGuestVoucher: () -> Unit,
     onDeleteGuestVoucher: () -> Unit,
     onRefreshGuestQr: () -> Unit,
     onReconnect: () -> Unit,
     onRefreshWeather: () -> Unit,
+    onRefreshHouse: () -> Unit,
+    onClearHistory: () -> Unit,
     onSettings: () -> Unit
 ) {
     val alarm = connectionState.alarm
     var pinAction by remember { mutableStateOf<AlarmAction?>(null) }
     var showGuestWifi by remember { mutableStateOf(false) }
+    var showHistory by remember { mutableStateOf(false) }
 
     LaunchedEffect(showGuestWifi) {
         if (showGuestWifi) onRefreshGuestQr()
@@ -111,9 +127,11 @@ fun AlarmScreen(
                     compact = true,
                     onReconnect = onReconnect,
                     onRefreshWeather = onRefreshWeather,
+                    onHistory = { showHistory = true },
                     onSettings = onSettings
                 )
                 ErrorBlock(connectionState)
+                ContextStatusBanner(alarm)
                 if (!settings.guestVoucherSensorEntityId.isNullOrBlank()) {
                     GuestWifiEntryCard(
                         voucher = connectionState.guestVoucher,
@@ -122,6 +140,7 @@ fun AlarmScreen(
                         onClick = { showGuestWifi = true }
                     )
                 }
+                HouseSummaryCard(houseSummaryState, onRefreshHouse)
                 AlarmStateCard(alarm = alarm, modifier = Modifier.fillMaxWidth())
                 AlarmActionsPanel(
                     alarm = alarm,
@@ -149,9 +168,11 @@ fun AlarmScreen(
                     compact = false,
                     onReconnect = onReconnect,
                     onRefreshWeather = onRefreshWeather,
+                    onHistory = { showHistory = true },
                     onSettings = onSettings
                 )
                 ErrorBlock(connectionState)
+                ContextStatusBanner(alarm)
                 if (!settings.guestVoucherSensorEntityId.isNullOrBlank()) {
                     GuestWifiEntryCard(
                         voucher = connectionState.guestVoucher,
@@ -160,6 +181,7 @@ fun AlarmScreen(
                         onClick = { showGuestWifi = true }
                     )
                 }
+                HouseSummaryCard(houseSummaryState, onRefreshHouse)
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -205,6 +227,14 @@ fun AlarmScreen(
         )
     }
 
+    if (showHistory) {
+        HistoryDialog(
+            events = history,
+            onClear = onClearHistory,
+            onDismiss = { showHistory = false }
+        )
+    }
+
     pinAction?.let { action ->
         PinDialog(
             action = action,
@@ -225,6 +255,121 @@ private fun ErrorBlock(connectionState: HomeAssistantConnectionState) {
 }
 
 @Composable
+private fun ContextStatusBanner(alarm: AlarmEntityState?) {
+    val state = alarm?.state ?: return
+    if (state !in setOf("triggered", "pending", "arming", "disarming")) return
+    val critical = state == "triggered"
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        color = if (critical) MaterialTheme.colorScheme.errorContainer else MaterialTheme.colorScheme.tertiaryContainer,
+        shape = MaterialTheme.shapes.large
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Text(if (critical) "🚨" else "⏳", style = MaterialTheme.typography.headlineMedium)
+            Column(modifier = Modifier.weight(1f)) {
+                Text(alarmStateLabel(state), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                Text(
+                    if (critical) stringResource(R.string.context_alarm_triggered) else stringResource(R.string.context_alarm_transition),
+                    style = MaterialTheme.typography.bodyMedium
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun HouseSummaryCard(state: HouseSummaryUiState, onRefresh: () -> Unit) {
+    val summary = state.summary
+    Card(modifier = Modifier.fillMaxWidth(), onClick = onRefresh) {
+        Column(
+            modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Text(stringResource(R.string.house_status), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                Spacer(Modifier.weight(1f))
+                if (state.isLoading) CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
+                Text("↻", style = MaterialTheme.typography.titleMedium)
+            }
+            if (summary == null) {
+                Text(state.errorMessage ?: stringResource(R.string.house_status_loading), color = MaterialTheme.colorScheme.onSurfaceVariant)
+            } else {
+                Row(
+                    modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(16.dp)
+                ) {
+                    Text("🚪 ${summary.openDoors}")
+                    Text("🪟 ${summary.openWindows}")
+                    Text("💡 ${summary.lightsOn}")
+                    Text("👤 ${summary.personsHome}")
+                    summary.temperatureC?.let { Text("🌡 ${String.format(Locale.getDefault(), "%.1f", it)}°C") }
+                }
+                if (summary.openEntityNames.isNotEmpty()) {
+                    Text(
+                        stringResource(R.string.house_open_entities, summary.openEntityNames.joinToString(", ")),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun HistoryDialog(events: List<PanelEvent>, onClear: () -> Unit, onDismiss: () -> Unit) {
+    val formatter = remember { DateTimeFormatter.ofPattern("HH:mm") }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("🕘 ${stringResource(R.string.history_title)}") },
+        text = {
+            Column(
+                modifier = Modifier.heightIn(max = 520.dp).verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                if (events.isEmpty()) {
+                    Text(stringResource(R.string.history_empty), color = MaterialTheme.colorScheme.onSurfaceVariant)
+                } else {
+                    events.forEach { event ->
+                        val time = Instant.ofEpochMilli(event.timestampEpochMs)
+                            .atZone(ZoneId.systemDefault())
+                            .toLocalTime()
+                            .format(formatter)
+                        Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.Top) {
+                            Text(historyIcon(event.kind), style = MaterialTheme.typography.titleMedium)
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(event.message, style = MaterialTheme.typography.bodyMedium)
+                                Text(time, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.close)) } },
+        dismissButton = {
+            if (events.isNotEmpty()) TextButton(onClick = onClear) { Text(stringResource(R.string.history_clear)) }
+        }
+    )
+}
+
+private fun historyIcon(kind: String): String = when (kind) {
+    "alarm" -> "🛡️"
+    "guest" -> "📶"
+    "connection" -> "🔗"
+    "update" -> "⬆️"
+    else -> "•"
+}
+
+@Composable
 private fun DashboardHeader(
     alarm: AlarmEntityState?,
     fallbackName: String,
@@ -233,6 +378,7 @@ private fun DashboardHeader(
     compact: Boolean,
     onReconnect: () -> Unit,
     onRefreshWeather: () -> Unit,
+    onHistory: () -> Unit,
     onSettings: () -> Unit
 ) {
     if (compact) {
@@ -251,6 +397,9 @@ private fun DashboardHeader(
                     ConnectionChip(connectionState.status, onReconnect)
                 }
                 ClockBlock(weatherState = weatherState)
+                IconButton(onClick = onHistory) {
+                    Text("🕘", style = MaterialTheme.typography.headlineSmall)
+                }
                 IconButton(onClick = onSettings) {
                     Text("⚙️", style = MaterialTheme.typography.headlineSmall)
                 }
@@ -282,6 +431,9 @@ private fun DashboardHeader(
                 modifier = Modifier.weight(1.25f),
                 onRefresh = onRefreshWeather
             )
+            IconButton(onClick = onHistory) {
+                Text("🕘", style = MaterialTheme.typography.headlineMedium)
+            }
             IconButton(onClick = onSettings) {
                 Text("⚙️", style = MaterialTheme.typography.headlineMedium)
             }
@@ -361,6 +513,7 @@ private fun GuestWifiDialog(
     onRefreshQr: () -> Unit,
     onDismiss: () -> Unit
 ) {
+    val context = LocalContext.current
     val qrBitmap = remember(guestWifiState.qrImageBytes) {
         guestWifiState.qrImageBytes?.let { bytes ->
             runCatching { BitmapFactory.decodeByteArray(bytes, 0, bytes.size)?.asImageBitmap() }.getOrNull()
@@ -368,49 +521,77 @@ private fun GuestWifiDialog(
     }
     var confirmDelete by remember { mutableStateOf(false) }
     val busy = pending || deleting
+    val voucherCode = voucher?.code.orEmpty()
+    val shareText = buildString {
+        append(voucher?.wlanName?.takeIf { it.isNotBlank() } ?: "Guest Wi-Fi")
+        if (voucherCode.isNotBlank()) append("\nVoucher: $voucherCode")
+        voucher?.duration?.takeIf { it.isNotBlank() }?.let { append("\nDuration: $it") }
+    }
 
-    AlertDialog(
+    Dialog(
         onDismissRequest = { if (!busy) onDismiss() },
-        title = { Text("📶 ${stringResource(R.string.guest_wifi_title)}") },
-        text = {
+        properties = DialogProperties(usePlatformDefaultWidth = false, dismissOnBackPress = !busy)
+    ) {
+        Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
             Column(
-                modifier = Modifier.verticalScroll(rememberScrollState()),
+                modifier = Modifier
+                    .fillMaxSize()
+                    .verticalScroll(rememberScrollState())
+                    .padding(20.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(12.dp)
+                verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
-                voucher?.wlanName?.takeIf { it.isNotBlank() }?.let {
-                    Text(it, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Text("📶", style = MaterialTheme.typography.headlineLarge)
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(stringResource(R.string.visitor_mode_title), style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
+                        Text(voucher?.wlanName ?: stringResource(R.string.guest_wifi_title), color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                    OutlinedButton(onClick = onDismiss, enabled = !busy) { Text(stringResource(R.string.close)) }
                 }
 
-                if (!voucher?.code.isNullOrBlank()) {
+                if (voucherCode.isNotBlank()) {
                     Surface(
                         modifier = Modifier.fillMaxWidth(),
-                        shape = MaterialTheme.shapes.large,
+                        shape = MaterialTheme.shapes.extraLarge,
                         color = MaterialTheme.colorScheme.primaryContainer
                     ) {
                         Column(
-                            modifier = Modifier.padding(16.dp),
-                            horizontalAlignment = Alignment.CenterHorizontally
+                            modifier = Modifier.padding(20.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
-                            Text(stringResource(R.string.guest_wifi_code), style = MaterialTheme.typography.labelLarge)
-                            Text(
-                                voucher?.code.orEmpty(),
-                                style = MaterialTheme.typography.headlineMedium,
-                                fontWeight = FontWeight.Bold,
-                                textAlign = TextAlign.Center
-                            )
+                            Text(stringResource(R.string.guest_wifi_code), style = MaterialTheme.typography.titleMedium)
+                            Text(voucherCode, style = MaterialTheme.typography.displaySmall, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center)
+                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                OutlinedButton(onClick = {
+                                    val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                                    clipboard.setPrimaryClip(ClipData.newPlainText("Guest Wi-Fi voucher", voucherCode))
+                                }) { Text(stringResource(R.string.copy_code)) }
+                                OutlinedButton(onClick = {
+                                    val intent = Intent(Intent.ACTION_SEND).apply {
+                                        type = "text/plain"
+                                        putExtra(Intent.EXTRA_TEXT, shareText)
+                                    }
+                                    context.startActivity(Intent.createChooser(intent, context.getString(R.string.share_voucher)))
+                                }) { Text(stringResource(R.string.share_voucher)) }
+                            }
                         }
                     }
                 } else {
-                    Text(stringResource(R.string.guest_wifi_no_voucher), textAlign = TextAlign.Center)
+                    Text(stringResource(R.string.guest_wifi_no_voucher), style = MaterialTheme.typography.titleMedium, textAlign = TextAlign.Center)
                 }
 
                 when {
-                    guestWifiState.isLoadingQr -> CircularProgressIndicator(modifier = Modifier.size(36.dp))
+                    guestWifiState.isLoadingQr -> CircularProgressIndicator(modifier = Modifier.size(52.dp))
                     qrBitmap != null -> Image(
                         bitmap = qrBitmap,
                         contentDescription = stringResource(R.string.guest_wifi_qr),
-                        modifier = Modifier.sizeIn(maxWidth = 280.dp, maxHeight = 280.dp)
+                        modifier = Modifier.sizeIn(minWidth = 220.dp, minHeight = 220.dp, maxWidth = 460.dp, maxHeight = 460.dp)
                     )
                     else -> {
                         Text(
@@ -426,66 +607,46 @@ private fun GuestWifiDialog(
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
-                        TextButton(onClick = onRefreshQr) {
-                            Text(stringResource(R.string.retry))
-                        }
+                        TextButton(onClick = onRefreshQr) { Text(stringResource(R.string.retry)) }
                     }
                 }
 
-                voucher?.duration?.let {
-                    Text(stringResource(R.string.guest_wifi_duration, it), style = MaterialTheme.typography.bodySmall)
+                Row(horizontalArrangement = Arrangement.spacedBy(16.dp), verticalAlignment = Alignment.CenterVertically) {
+                    voucher?.duration?.let { Text(stringResource(R.string.guest_wifi_duration, it)) }
+                    voucher?.status?.let { Text(stringResource(R.string.guest_wifi_status, it)) }
                 }
-                voucher?.status?.let {
-                    Text(stringResource(R.string.guest_wifi_status, it), style = MaterialTheme.typography.bodySmall)
-                }
-                if (!errorMessage.isNullOrBlank()) {
-                    Text(errorMessage, color = MaterialTheme.colorScheme.error, textAlign = TextAlign.Center)
-                }
-            }
-        },
-        confirmButton = {
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                if (canDelete && !voucher?.code.isNullOrBlank()) {
-                    OutlinedButton(onClick = { confirmDelete = true }, enabled = !busy) {
-                        if (deleting) {
-                            CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
-                            Spacer(Modifier.width(8.dp))
+                if (!errorMessage.isNullOrBlank()) Text(errorMessage, color = MaterialTheme.colorScheme.error, textAlign = TextAlign.Center)
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.Center,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    if (canDelete && voucherCode.isNotBlank()) {
+                        OutlinedButton(onClick = { confirmDelete = true }, enabled = !busy) {
+                            Text(if (deleting) stringResource(R.string.guest_wifi_deleting) else stringResource(R.string.guest_wifi_delete))
                         }
-                        Text(if (deleting) stringResource(R.string.guest_wifi_deleting) else stringResource(R.string.guest_wifi_delete))
+                        Spacer(Modifier.width(12.dp))
                     }
-                }
-                Button(onClick = onCreate, enabled = !busy) {
-                    if (pending) {
-                        CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
-                        Spacer(Modifier.width(8.dp))
+                    Button(onClick = onCreate, enabled = !busy) {
+                        Text(if (pending) stringResource(R.string.guest_wifi_creating) else stringResource(R.string.guest_wifi_create))
                     }
-                    Text(if (pending) stringResource(R.string.guest_wifi_creating) else stringResource(R.string.guest_wifi_create))
                 }
             }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss, enabled = !busy) { Text(stringResource(R.string.close)) }
         }
-    )
+    }
 
     if (confirmDelete) {
         AlertDialog(
             onDismissRequest = { confirmDelete = false },
             title = { Text(stringResource(R.string.guest_wifi_delete_confirm_title)) },
-            text = { Text(stringResource(R.string.guest_wifi_delete_confirm_message, voucher?.code.orEmpty())) },
+            text = { Text(stringResource(R.string.guest_wifi_delete_confirm_message, voucherCode)) },
             confirmButton = {
-                Button(
-                    onClick = {
-                        confirmDelete = false
-                        onDelete()
-                    }
-                ) {
+                Button(onClick = { confirmDelete = false; onDelete() }) {
                     Text(stringResource(R.string.guest_wifi_delete))
                 }
             },
-            dismissButton = {
-                TextButton(onClick = { confirmDelete = false }) { Text(stringResource(R.string.cancel)) }
-            }
+            dismissButton = { TextButton(onClick = { confirmDelete = false }) { Text(stringResource(R.string.cancel)) } }
         )
     }
 }

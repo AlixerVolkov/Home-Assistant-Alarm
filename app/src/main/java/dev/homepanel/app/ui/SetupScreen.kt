@@ -41,6 +41,7 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import dev.homepanel.app.DiscoveryState
 import dev.homepanel.app.R
+import dev.homepanel.app.UpdateUiState
 import dev.homepanel.app.camera.RtspCameraState
 import dev.homepanel.app.data.PanelSettings
 import dev.homepanel.app.mqtt.MqttDeviceState
@@ -52,8 +53,11 @@ fun SetupScreen(
     discoveryState: DiscoveryState,
     rtspCameraState: RtspCameraState,
     mqttDeviceState: MqttDeviceState,
+    updateState: UpdateUiState,
     canCancel: Boolean,
     onDiscover: (String, String) -> Unit,
+    onCheckUpdate: () -> Unit,
+    onDownloadUpdate: () -> Unit,
     onSave: (PanelSettings) -> Unit,
     onCancel: () -> Unit,
     onClear: () -> Unit
@@ -79,11 +83,26 @@ fun SetupScreen(
     var proximityWakeEnabled by rememberSaveable(initialSettings?.proximityWakeEnabled) {
         mutableStateOf(initialSettings?.proximityWakeEnabled ?: true)
     }
+    var autoBrightnessEnabled by rememberSaveable(initialSettings?.autoBrightnessEnabled) {
+        mutableStateOf(initialSettings?.autoBrightnessEnabled ?: true)
+    }
+    var kioskModeEnabled by rememberSaveable(initialSettings?.kioskModeEnabled) {
+        mutableStateOf(initialSettings?.kioskModeEnabled ?: false)
+    }
+    var settingsPin by rememberSaveable(initialSettings?.settingsPin) {
+        mutableStateOf(initialSettings?.settingsPin.orEmpty())
+    }
+    var updateChecksEnabled by rememberSaveable(initialSettings?.updateChecksEnabled) {
+        mutableStateOf(initialSettings?.updateChecksEnabled ?: true)
+    }
     var rtspEnabled by rememberSaveable(initialSettings?.rtspEnabled) {
         mutableStateOf(initialSettings?.rtspEnabled ?: false)
     }
     var rtspPort by rememberSaveable(initialSettings?.rtspPort) {
         mutableStateOf((initialSettings?.rtspPort ?: 8554).toString())
+    }
+    var rtspAdvertisedHost by rememberSaveable(initialSettings?.rtspAdvertisedHost) {
+        mutableStateOf(initialSettings?.rtspAdvertisedHost.orEmpty())
     }
     var guestVoucherSensor by rememberSaveable(initialSettings?.guestVoucherSensorEntityId) {
         mutableStateOf(initialSettings?.guestVoucherSensorEntityId.orEmpty())
@@ -128,6 +147,7 @@ fun SetupScreen(
 
     val context = LocalContext.current
     var rtspCopied by rememberSaveable { mutableStateOf(false) }
+    var frigateCopied by rememberSaveable { mutableStateOf(false) }
 
     BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
         val horizontalPadding = if (maxWidth < 600.dp) 16.dp else 32.dp
@@ -418,6 +438,16 @@ fun SetupScreen(
                         singleLine = true
                     )
 
+                    OutlinedTextField(
+                        value = rtspAdvertisedHost,
+                        onValueChange = { rtspAdvertisedHost = it.trim() },
+                        modifier = Modifier.fillMaxWidth(),
+                        label = { Text(stringResource(R.string.rtsp_advertised_host)) },
+                        placeholder = { Text(rtspCameraState.ipv4Address ?: "192.168.1.50") },
+                        supportingText = { Text(stringResource(R.string.rtsp_advertised_host_hint)) },
+                        singleLine = true
+                    )
+
                     Card(modifier = Modifier.fillMaxWidth()) {
                         Column(
                             modifier = Modifier.padding(14.dp),
@@ -436,6 +466,23 @@ fun SetupScreen(
                                 )
                                 !endpoint.isNullOrBlank() -> {
                                     Text(endpoint, style = MaterialTheme.typography.bodyMedium)
+                                    if (!rtspCameraState.ipv4Address.isNullOrBlank()) {
+                                        Text(
+                                            stringResource(
+                                                R.string.rtsp_ipv4_detected,
+                                                rtspCameraState.ipv4Address.orEmpty(),
+                                                rtspCameraState.interfaceName.orEmpty()
+                                            ),
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    } else if (rtspAdvertisedHost.isBlank()) {
+                                        Text(
+                                            stringResource(R.string.rtsp_no_ipv4),
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = MaterialTheme.colorScheme.error
+                                        )
+                                    }
                                     Text(
                                         stringResource(R.string.rtsp_clients, rtspCameraState.clientCount),
                                         style = MaterialTheme.typography.bodySmall,
@@ -449,6 +496,16 @@ fun SetupScreen(
                                         }
                                     ) {
                                         Text(if (rtspCopied) stringResource(R.string.rtsp_copied) else stringResource(R.string.rtsp_copy))
+                                    }
+                                    OutlinedButton(
+                                        onClick = {
+                                            val yaml = frigateYaml(endpoint)
+                                            val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                                            clipboard.setPrimaryClip(ClipData.newPlainText("HomePanel Frigate YAML", yaml))
+                                            frigateCopied = true
+                                        }
+                                    ) {
+                                        Text(if (frigateCopied) stringResource(R.string.frigate_copied) else stringResource(R.string.frigate_copy))
                                     }
                                 }
                                 else -> Text(
@@ -555,6 +612,31 @@ fun SetupScreen(
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
 
+                SettingsSwitchRow(
+                    title = stringResource(R.string.auto_brightness_title),
+                    subtitle = stringResource(R.string.auto_brightness_subtitle),
+                    checked = autoBrightnessEnabled,
+                    onCheckedChange = { autoBrightnessEnabled = it }
+                )
+                SettingsSwitchRow(
+                    title = stringResource(R.string.kiosk_title),
+                    subtitle = stringResource(R.string.kiosk_subtitle),
+                    checked = kioskModeEnabled,
+                    onCheckedChange = { kioskModeEnabled = it }
+                )
+                if (kioskModeEnabled) {
+                    OutlinedTextField(
+                        value = settingsPin,
+                        onValueChange = { settingsPin = it.filter(Char::isDigit).take(8) },
+                        modifier = Modifier.fillMaxWidth(),
+                        label = { Text(stringResource(R.string.kiosk_pin)) },
+                        supportingText = { Text(stringResource(R.string.kiosk_pin_hint)) },
+                        visualTransformation = PasswordVisualTransformation(),
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword),
+                        singleLine = true
+                    )
+                }
+
                 if (compactDisplaySettings) {
                     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                         TimeoutField(saverMinutes, { saverMinutes = it }, R.string.screensaver_minutes)
@@ -580,6 +662,41 @@ fun SetupScreen(
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
 
+                HorizontalDivider()
+                Text(stringResource(R.string.update_title), style = MaterialTheme.typography.titleMedium)
+                SettingsSwitchRow(
+                    title = stringResource(R.string.update_auto_check),
+                    subtitle = stringResource(R.string.update_auto_check_hint),
+                    checked = updateChecksEnabled,
+                    onCheckedChange = { updateChecksEnabled = it }
+                )
+                Card(modifier = Modifier.fillMaxWidth()) {
+                    Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        val info = updateState.info
+                        Text(
+                            when {
+                                updateState.isLoading -> stringResource(R.string.update_checking)
+                                updateState.isDownloading -> stringResource(R.string.update_downloading)
+                                info?.available == true -> stringResource(R.string.update_available, info.latestVersion.orEmpty())
+                                info?.latestVersion != null -> stringResource(R.string.update_current, info.currentVersion)
+                                else -> stringResource(R.string.update_release_needed)
+                            },
+                            style = MaterialTheme.typography.bodyMedium
+                        )
+                        updateState.errorMessage?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            OutlinedButton(onClick = onCheckUpdate, enabled = !updateState.isLoading && !updateState.isDownloading) {
+                                Text(stringResource(R.string.update_check))
+                            }
+                            if (info?.available == true && !info.apkDownloadUrl.isNullOrBlank()) {
+                                Button(onClick = onDownloadUpdate, enabled = !updateState.isDownloading) {
+                                    Text(stringResource(R.string.update_install))
+                                }
+                            }
+                        }
+                    }
+                }
+
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(12.dp)
@@ -595,8 +712,13 @@ fun SetupScreen(
                                     screensaverTimeoutMinutes = saverMinutes.toIntOrNull() ?: 0,
                                     sleepTimeoutMinutes = sleepMinutes.toIntOrNull() ?: 0,
                                     proximityWakeEnabled = proximityWakeEnabled,
+                                    autoBrightnessEnabled = autoBrightnessEnabled,
+                                    kioskModeEnabled = kioskModeEnabled,
+                                    settingsPin = settingsPin,
+                                    updateChecksEnabled = updateChecksEnabled,
                                     rtspEnabled = rtspEnabled,
                                     rtspPort = rtspPort.toIntOrNull() ?: 8554,
+                                    rtspAdvertisedHost = rtspAdvertisedHost,
                                     guestVoucherSensorEntityId = guestVoucherSensor.takeIf { it.isNotBlank() },
                                     guestCreateButtonEntityId = guestCreateButton.takeIf { it.isNotBlank() },
                                     guestDeleteButtonEntityId = guestDeleteButton.takeIf { it.isNotBlank() },
@@ -662,6 +784,23 @@ private fun SettingsSwitchRow(
     }
 }
 
+
+private fun frigateYaml(endpoint: String): String = """go2rtc:
+  streams:
+    homepanel_front: $endpoint
+
+cameras:
+  homepanel_front:
+    ffmpeg:
+      inputs:
+        - path: rtsp://127.0.0.1:8554/homepanel_front
+          input_args: preset-rtsp-restream
+          roles:
+            - detect
+    detect:
+      width: 1280
+      height: 720
+""".trim()
 
 private fun deriveHost(baseUrl: String): String = runCatching {
     val normalized = if (baseUrl.contains("://")) baseUrl else "http://$baseUrl"

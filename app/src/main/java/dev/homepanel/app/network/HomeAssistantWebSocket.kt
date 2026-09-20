@@ -30,6 +30,9 @@ class HomeAssistantWebSocket(
     private val _wakeEvents = MutableSharedFlow<Unit>(extraBufferCapacity = 8)
     val wakeEvents: SharedFlow<Unit> = _wakeEvents.asSharedFlow()
 
+    private val _entityEvents = MutableSharedFlow<HomeEntityEvent>(extraBufferCapacity = 64)
+    val entityEvents: SharedFlow<HomeEntityEvent> = _entityEvents.asSharedFlow()
+
     private var webSocket: WebSocket? = null
     private var accessToken: String = ""
     private var alarmEntityId: String = ""
@@ -374,6 +377,15 @@ class HomeAssistantWebSocket(
         val entityId = data.optString("entity_id")
         val newState = data.optJSONObject("new_state") ?: return
         val newValue = newState.optString("state")
+        val attributes = newState.optJSONObject("attributes")
+        val friendlyName = attributes?.optString("friendly_name")
+            ?.takeIf { it.isNotBlank() }
+            ?: entityId.substringAfter('.').replace('_', ' ')
+        val deviceClass = attributes?.optString("device_class")
+            ?.takeIf { it.isNotBlank() && it != "null" }
+        if (shouldPublishEntityEvent(entityId, deviceClass)) {
+            _entityEvents.tryEmit(HomeEntityEvent(entityId, friendlyName, newValue, deviceClass))
+        }
 
         if (entityId == wakeEntityId && isDetectionState(newValue)) {
             _wakeEvents.tryEmit(Unit)
@@ -446,6 +458,15 @@ class HomeAssistantWebSocket(
 
     private fun isDetectionState(state: String): Boolean {
         return state.lowercase() in DETECTION_STATES
+    }
+
+    private fun shouldPublishEntityEvent(entityId: String, deviceClass: String?): Boolean {
+        val domain = entityId.substringBefore('.')
+        return when (domain) {
+            "light", "person" -> true
+            "binary_sensor" -> deviceClass in setOf("door", "window", "opening", "garage_door", "motion", "occupancy")
+            else -> false
+        }
     }
 
     companion object {

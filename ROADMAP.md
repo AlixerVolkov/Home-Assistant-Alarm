@@ -1,72 +1,33 @@
-# Roadmap
+# HomePanel roadmap
 
-## v0.1 - Home Assistant alarm MVP
+## Implementado hasta v0.6.0
 
-- [x] Compose UI
-- [x] Home Assistant URL/token setup
-- [x] Alarm discovery
-- [x] Secure local token storage
-- [x] WebSocket authentication
-- [x] Initial state loading
-- [x] Real-time state changes
-- [x] Arm/disarm actions
-- [x] Supported-feature filtering
-- [x] English/Spanish resources
+- Home Assistant WebSocket + Alarmo.
+- PIN y estados de alarma con acciones protegidas contra transiciones redundantes.
+- Tiempo/ubicacion automatica e interfaz responsive.
+- Salvapantallas, reposo, wake por Home Assistant y proximidad Android.
+- UniFi Hotspot Manager: crear/borrar voucher, QR, copiar/compartir.
+- Camara frontal RTSP H.264 y configuracion Frigate/go2rtc.
+- MQTT Discovery: bateria, carga, proximidad, luminosidad, pantalla y RTSP.
+- IPv4-first para RTSP y MQTT LAN.
+- Brillo automatico por sensor de luz.
+- Estado de casa y dashboard contextual.
+- Historial persistente.
+- Kiosk inmersivo + PIN de configuracion.
+- Actualizacion desde GitHub Releases + workflow de publicacion.
 
-## v0.2 - Reliability and authentication
+## Siguientes candidatos
 
-- [ ] OAuth-style Home Assistant authentication flow
-- [ ] Automatic reconnect with exponential backoff
-- [ ] Network reachability handling
-- [ ] Multiple Home Assistant URLs (internal/external)
-- [ ] Better service-call result feedback
-- [ ] Unit tests with MockWebServer
-- [ ] CI build and lint
+### v0.6.x
+- Mejorar diagnostico MQTT (latencia, IP, RSSI, uptime y version como entidades).
+- Permitir seleccionar exactamente las entidades que forman el resumen de casa.
+- Presets de vouchers UniFi y cuenta atras de expiracion.
+- Mejoras de accesibilidad y tamanos de fuente.
 
-## v0.3 - MQTT device bridge
-
-- [ ] MQTT over TLS
-- [ ] MQTT Discovery
-- [ ] Battery sensor
-- [ ] Charging state
-- [ ] Screen state
-- [ ] Brightness control
-- [ ] Motion sensor publishing
-- [ ] Remote commands
-
-## v0.4 - Wall panel / kiosk
-
-- [ ] Immersive kiosk mode
-- [ ] Keep screen awake policy
-- [ ] Wake on motion
-- [ ] Screensaver clock
-- [ ] Day/night brightness profiles
-- [ ] Optional Home Assistant dashboard WebView
-
-## v0.5 - Camera
-
-- [ ] CameraX
-- [ ] Snapshot endpoint or MQTT transport
-- [ ] Local motion detection
-- [ ] Privacy controls
-- [ ] Home Assistant camera entity integration
-
-## v1.0
-
-- [ ] Guided onboarding
-- [ ] Multiple alarm panels
-- [ ] Multiple tablet profiles
-- [ ] Signed release APK/AAB
-- [ ] Upgrade/migration strategy
-- [ ] Documentation and screenshots
-
-## v0.5.0 - Home Assistant device registration
-
-- [x] MQTT Discovery device
-- [x] Battery percentage and battery temperature
-- [x] Charging state
-- [x] Android proximity state
-- [x] Remote screen switch
-- [x] Display mode diagnostics
-- [x] RTSP status, client count and URL diagnostics
-- [ ] Native `camera.*` entity (requires snapshot or custom HA integration; RTSP URL alone is not an MQTT Camera payload)
+### v0.7.x
+- Modo Device Owner opcional para kiosk completo / lock task.
+- Lanzamiento robusto despues de reboot mediante provisionamiento kiosk.
+- Paginas contextuales configurables (timbre, puerta, camaras, emergencia).
+- Integracion mas profunda con Frigate: eventos/detecciones y vista de visitante.
+- Assist / voz y TTS.
+- Deteccion local de persona con la camara frontal.

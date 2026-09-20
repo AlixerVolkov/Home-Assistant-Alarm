@@ -100,6 +100,81 @@ class HomeAssistantRestClient(
         }
     }
 
+
+    suspend fun fetchHouseSummary(
+        baseUrl: String,
+        accessToken: String
+    ): HouseSummary = withContext(Dispatchers.IO) {
+        val request = authenticatedRequest(
+            url = HomeAssistantUrl.restUrl(baseUrl, "api/states"),
+            accessToken = accessToken
+        ).get().build()
+
+        client.newCall(request).execute().use { response ->
+            if (!response.isSuccessful) error("Home Assistant returned HTTP ${response.code}")
+            val states = JSONArray(response.body.string())
+            var openDoors = 0
+            var openWindows = 0
+            var lightsOn = 0
+            var personsHome = 0
+            val openNames = mutableListOf<String>()
+            val temperatures = mutableListOf<Triple<String, String, Double>>()
+
+            for (index in 0 until states.length()) {
+                val item = states.optJSONObject(index) ?: continue
+                val entityId = item.optString("entity_id")
+                val state = item.optString("state").lowercase()
+                if (state == "unavailable" || state == "unknown") continue
+                val attributes = item.optJSONObject("attributes")
+                val name = friendlyName(entityId, attributes)
+                val domain = entityId.substringBefore('.', "")
+                val deviceClass = attributes?.optString("device_class")?.lowercase().orEmpty()
+
+                if (domain == "light" && state == "on") lightsOn++
+                if (domain == "person" && state == "home") personsHome++
+
+                if (domain == "binary_sensor" && state in setOf("on", "open")) {
+                    when (deviceClass) {
+                        "door", "garage_door", "opening" -> {
+                            openDoors++
+                            if (openNames.size < 5) openNames += name
+                        }
+                        "window" -> {
+                            openWindows++
+                            if (openNames.size < 5) openNames += name
+                        }
+                    }
+                }
+
+                if (domain == "sensor" && deviceClass == "temperature") {
+                    val value = item.optString("state").replace(',', '.').toDoubleOrNull() ?: continue
+                    val haystack = "$entityId $name".lowercase()
+                    if (EXCLUDED_TEMPERATURE_HINTS.none { hint -> haystack.contains(hint) }) {
+                        temperatures += Triple(entityId, name, value)
+                    }
+                }
+            }
+
+            val preferredTemperature = temperatures.minByOrNull { (entityId, name, _) ->
+                val haystack = "$entityId $name".lowercase()
+                when {
+                    PREFERRED_TEMPERATURE_HINTS.any { hint -> haystack.contains(hint) } -> 0
+                    else -> 1
+                }
+            }
+
+            HouseSummary(
+                openDoors = openDoors,
+                openWindows = openWindows,
+                lightsOn = lightsOn,
+                personsHome = personsHome,
+                temperatureC = preferredTemperature?.third,
+                temperatureName = preferredTemperature?.second,
+                openEntityNames = openNames
+            )
+        }
+    }
+
     suspend fun fetchImage(
         baseUrl: String,
         accessToken: String,
@@ -135,5 +210,11 @@ class HomeAssistantRestClient(
 
     companion object {
         private val WAKE_DEVICE_CLASSES = setOf("motion", "occupancy", "presence")
+        private val EXCLUDED_TEMPERATURE_HINTS = setOf(
+            "battery", "cpu", "processor", "tablet", "phone", "device temperature", "gpu", "ssd"
+        )
+        private val PREFERRED_TEMPERATURE_HINTS = setOf(
+            "indoor", "inside", "living", "salon", "woonkamer", "room", "interior", "temperature"
+        )
     }
 }

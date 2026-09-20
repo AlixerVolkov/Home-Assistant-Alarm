@@ -1,73 +1,107 @@
-# HomePanel v0.5.1
+# HomePanel v0.6.0
 
 Panel Android moderno para Home Assistant / Alarmo, pensado para tablets de pared.
 
-## Correcciones v0.5.1
+## Funciones principales
 
-- MQTT espera el permiso de red local de Android 17 antes de conectar.
-- MQTT se reintenta automaticamente al conceder el permiso.
-- MQTT sin TLS prefiere IPv4 cuando el broker resuelve a IPv4 e IPv6.
-- Se hace una prueba TCP previa para distinguir puerto/firewall/VLAN de errores MQTT.
-- La URL RTSP mostrada prefiere la IPv4 LAN de la tablet para Frigate/go2rtc.
+- Conexion directa a Home Assistant por WebSocket.
+- Alarmo / `alarm_control_panel`: Home, Away, Night, Vacation, Custom Bypass y Disarm con PIN cuando corresponde.
+- Estado en tiempo real y proteccion contra enviar una transicion al estado que ya esta activo.
+- Tiempo y ubicacion automaticos segun el dispositivo.
+- Salvapantallas, reposo y despertar por sensor HA o proximidad Android.
+- Interfaz adaptable a telefono/tablet, portrait/landscape y ventanas redimensionables.
+- UniFi Hotspot Manager: crear/borrar voucher, QR, copiar y compartir codigo.
+- Camara frontal H.264 por RTSP para Frigate/go2rtc.
+- MQTT Discovery para registrar HomePanel como dispositivo en Home Assistant.
+- Luminosidad ambiente, bateria, carga, proximidad, pantalla y diagnostico RTSP publicados por MQTT.
+- Brillo automatico usando el sensor de luz Android.
+- Estado resumido de la casa y dashboard contextual de alarma.
+- Historial reciente persistente.
+- Modo kiosk inmersivo con PIN para configuracion.
+- Comprobacion y descarga de actualizaciones desde GitHub Releases.
 
+## RTSP y Frigate
 
-## Novedades v0.5.0
+HomePanel v0.6.0 **prefiere IPv4** para la URL que presenta al usuario. Busca la IPv4 de la red activa de Android antes de recorrer otras interfaces. Si la tablet dispone, por ejemplo, de `192.168.1.74`, mostrara:
 
-- **HomePanel puede registrarse como un dispositivo real de Home Assistant mediante MQTT Discovery**.
-- La configuracion MQTT es opcional y se realiza desde la propia pantalla de Ajustes.
-- La contrasena MQTT se guarda cifrada con Android Keystore, igual que el token de Home Assistant.
-- Publica automaticamente disponibilidad y vuelve a enviar el discovery cuando Home Assistant publica `homeassistant/status = online`.
-- El sensor de proximidad Android se mantiene activo cuando esta habilitado, de modo que tambien puede verse desde Home Assistant.
-- El interruptor `switch.homepanel_screen` permite despertar el panel o enviarlo a reposo desde Home Assistant.
-- Mantiene Alarmo, UniFi vouchers, QR, RTSP, tiempo automatico, salvapantallas, reposo e interfaz responsive.
+```text
+rtsp://192.168.1.74:8554/
+```
 
-## Entidades MQTT
+En Ajustes > Camara frontal RTSP puedes:
 
-Una vez activado MQTT Discovery, Home Assistant agrupa estas entidades bajo un unico dispositivo **HomePanel**:
+- ver la IPv4 detectada y la interfaz,
+- fijar manualmente un host/IP anunciado si Android elige una interfaz incorrecta,
+- copiar la URL RTSP,
+- copiar un bloque de configuracion listo para Frigate/go2rtc.
+
+Ejemplo:
+
+```yaml
+go2rtc:
+  streams:
+    homepanel_front: rtsp://192.168.1.74:8554/
+
+cameras:
+  homepanel_front:
+    ffmpeg:
+      inputs:
+        - path: rtsp://127.0.0.1:8554/homepanel_front
+          input_args: preset-rtsp-restream
+          roles:
+            - detect
+    detect:
+      width: 1280
+      height: 720
+```
+
+La camara es video H.264 1280x720 a 15 fps, sin audio en esta version.
+
+## HomePanel como dispositivo MQTT
+
+Con MQTT Discovery activado se publican, entre otras:
 
 - `sensor.homepanel_battery`
 - `sensor.homepanel_battery_temperature`
 - `binary_sensor.homepanel_charging`
 - `binary_sensor.homepanel_proximity`
+- `sensor.homepanel_illuminance`
 - `switch.homepanel_screen`
 - `sensor.homepanel_display_mode`
 - `binary_sensor.homepanel_rtsp_server`
 - `sensor.homepanel_rtsp_clients`
 - `sensor.homepanel_front_camera_rtsp`
 
-Home Assistant puede anadir un sufijo al `entity_id` si ya existe una entidad con el mismo nombre. Los `unique_id` y el identificador del dispositivo se derivan del Android ID del panel, por lo que varios paneles pueden convivir en el mismo broker.
+Los `unique_id` incorporan el Android ID para permitir varios paneles.
 
-### Camara
+## Actualizaciones desde HomePanel
 
-La v0.5.0 registra la URL RTSP y el estado del servidor como entidades de diagnostico. **No crea todavia una entidad `camera.*` nativa**, porque MQTT Camera espera frames de imagen por MQTT y no una URL RTSP. El stream sigue disponible mediante `rtsp://...` para go2rtc, Frigate, VLC u otra integracion compatible.
+La app consulta el ultimo **GitHub Release** de este repositorio. Para que exista un APK descargable debes publicar una release, no solo ejecutar el workflow de build.
 
-## Configuracion MQTT
+Hay dos workflows:
 
-Necesitas tener configurada la integracion MQTT de Home Assistant y conocer los datos de acceso al broker.
+- **Build signed Android APK**: compila y deja un artifact de GitHub Actions.
+- **Publish HomePanel Release**: compila el mismo APK firmado y crea/actualiza `v0.6.0` en GitHub Releases con `HomePanel-v0.6.0.apk`.
 
-En HomePanel:
+Ejecuta `Publish HomePanel Release` manualmente desde Actions cuando quieras distribuir una version.
 
-1. Abre **Configuracion**.
-2. Activa **Registrar HomePanel por MQTT**.
-3. Introduce host, puerto, usuario y contrasena del broker.
-4. Activa TLS solo si el broker usa un certificado confiable para Android; normalmente TLS usa 8883 y MQTT local sin TLS usa 1883.
-5. Guarda.
+## Firma
 
-HomePanel publica discovery retenido y disponibilidad (`online/offline`). Home Assistant MQTT tambien publica su mensaje de nacimiento en `homeassistant/status`, que HomePanel usa para volver a anunciar el dispositivo tras un reinicio.
-
-## Actualizaciones
+Mantener siempre:
 
 ```text
 applicationId = dev.homepanel.app
-versionCode = 9
-versionName = 0.5.1
+mismo keystore de release
+versionCode creciente
 ```
 
-El APK release se firma con los mismos GitHub Actions secrets de las versiones anteriores. Puede instalarse encima de la v0.4.x/v0.3.1 firmada con la misma clave.
-
-Artefacto esperado:
+Version actual:
 
 ```text
-HomePanel-v0.5.1-signed-apk
-└── HomePanel-v0.5.1.apk
+versionCode = 11
+versionName = 0.6.0
 ```
+
+## Kiosk
+
+El modo kiosk de v0.6.0 oculta barras de sistema y puede exigir PIN para entrar en Configuracion. No convierte automaticamente el dispositivo en Android Device Owner; un bloqueo total de cambio de aplicaciones requiere provisionamiento adicional y queda como mejora futura.

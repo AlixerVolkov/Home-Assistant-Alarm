@@ -1,21 +1,40 @@
-# Build notes - HomePanel v0.5.0
+# Build notes - HomePanel v0.6.0
 
-- `applicationId`: `dev.homepanel.app`
-- `versionCode`: `9`
-- `versionName`: `0.5.0`
-- Build task: `:app:assembleRelease`
-- Signed by the existing GitHub Actions release keystore secrets.
-- Added Eclipse Paho Java MQTT client `1.2.5` for optional MQTT Discovery and screen commands.
-- Android 17 local-network permission remains required for local Home Assistant, RTSP and MQTT access.
-- Structural validation completed: XML parses, all four locales contain the same 120 strings, and all `R.string` references resolve.
-- Full Android compilation still occurs in GitHub Actions.
+## Toolchain de GitHub Actions
 
+- Ubuntu 24.04
+- JDK 17
+- Android SDK `platforms;android-37.0`
+- Build Tools 36.0.0
+- Gradle 9.6.0
+- Android Gradle Plugin 9.4.0
 
-## v0.5.1 LAN/MQTT fix
+## Version
 
-- `ACCESS_LOCAL_NETWORK` is checked before MQTT connection on Android 17+.
-- MQTT is retried after the runtime permission grant callback.
-- Plain MQTT prefers an IPv4 address when DNS returns dual-stack results.
-- A 5-second TCP probe precedes the MQTT handshake and reports reachability problems separately.
-- RTSP endpoint display prefers a LAN IPv4 address for Frigate/go2rtc.
-- `versionCode=10`, `versionName=0.5.1`.
+- applicationId: `dev.homepanel.app`
+- versionCode: `11`
+- versionName: `0.6.0`
+
+## Firma
+
+Requiere los repository secrets existentes:
+
+- `ANDROID_KEYSTORE_BASE64`
+- `ANDROID_KEYSTORE_PASSWORD`
+- `ANDROID_KEY_ALIAS`
+- `ANDROID_KEY_PASSWORD`
+
+## Workflows
+
+`build-apk.yml` genera un artifact de Actions.
+
+`release-apk.yml` genera el APK firmado y lo publica como GitHub Release. La funcion de actualizacion dentro de HomePanel consulta GitHub Releases, por lo que para probar actualizaciones futuras se debe publicar la nueva version mediante ese workflow.
+
+## Verificacion local realizada en este entorno
+
+- XML de recursos/manifest validado.
+- Referencias `R.string` comparadas con `values/strings.xml`.
+- Recursos EN/ES/NL/FR sincronizados.
+- Estructura repo-root y workflows revisados.
+
+No se ejecuto `assembleRelease` localmente porque este contenedor no dispone de Android SDK/Gradle completos; la compilacion definitiva la valida GitHub Actions.

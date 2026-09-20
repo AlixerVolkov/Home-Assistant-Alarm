@@ -5,6 +5,8 @@ import android.os.SystemClock
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import dev.homepanel.app.camera.RtspCameraServer
+import dev.homepanel.app.data.EventHistoryRepository
+import dev.homepanel.app.data.PanelEvent
 import dev.homepanel.app.data.PanelSettings
 import dev.homepanel.app.data.SettingsRepository
 import dev.homepanel.app.network.AlarmAction
@@ -14,10 +16,13 @@ import dev.homepanel.app.network.DeviceLocation
 import dev.homepanel.app.network.DeviceLocationResolver
 import dev.homepanel.app.network.GuestWifiSummary
 import dev.homepanel.app.network.HomeAssistantRestClient
+import dev.homepanel.app.network.HouseSummary
 import dev.homepanel.app.network.HomeAssistantWebSocket
 import dev.homepanel.app.network.WakeSensorSummary
 import dev.homepanel.app.network.WeatherClient
 import dev.homepanel.app.network.WeatherForecast
+import dev.homepanel.app.network.UpdateClient
+import dev.homepanel.app.network.UpdateInfo
 import dev.homepanel.app.mqtt.DeviceTelemetryReader
 import dev.homepanel.app.mqtt.MqttDeviceBridge
 import java.util.concurrent.TimeUnit
@@ -56,6 +61,20 @@ data class GuestWifiUiState(
     val errorMessage: String? = null
 )
 
+data class HouseSummaryUiState(
+    val isLoading: Boolean = false,
+    val summary: HouseSummary? = null,
+    val errorMessage: String? = null
+)
+
+data class UpdateUiState(
+    val isLoading: Boolean = false,
+    val isDownloading: Boolean = false,
+    val info: UpdateInfo? = null,
+    val installerUri: String? = null,
+    val errorMessage: String? = null
+)
+
 enum class PanelDisplayMode {
     ACTIVE,
     SCREENSAVER,
@@ -78,6 +97,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val locationResolver = DeviceLocationResolver(application)
     private val rtspCameraServer = RtspCameraServer(application)
     private val telemetryReader = DeviceTelemetryReader(application)
+    private val historyRepository = EventHistoryRepository(application)
+    private val updateClient = UpdateClient(application, httpClient)
     private val mqttDeviceBridge = MqttDeviceBridge(application) { screenOn ->
         viewModelScope.launch {
             if (screenOn) wakeDisplay() else forceSleepFromMqtt()
@@ -105,6 +126,17 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val _guestWifi = MutableStateFlow(GuestWifiUiState())
     val guestWifi: StateFlow<GuestWifiUiState> = _guestWifi.asStateFlow()
 
+    private val _houseSummary = MutableStateFlow(HouseSummaryUiState())
+    val houseSummary: StateFlow<HouseSummaryUiState> = _houseSummary.asStateFlow()
+
+    private val _update = MutableStateFlow(UpdateUiState())
+    val update: StateFlow<UpdateUiState> = _update.asStateFlow()
+
+    private val _ambientLux = MutableStateFlow<Float?>(null)
+    val ambientLux: StateFlow<Float?> = _ambientLux.asStateFlow()
+
+    val history: StateFlow<List<PanelEvent>> = historyRepository.events
+
     private val _displayMode = MutableStateFlow(PanelDisplayMode.ACTIVE)
     val displayMode: StateFlow<PanelDisplayMode> = _displayMode.asStateFlow()
 
@@ -117,8 +149,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     private var lastActivityElapsed = SystemClock.elapsedRealtime()
     private var lastGuestVoucherCode: String? = null
+    private var historyGuestVoucherCode: String? = null
+    private var lastAlarmHistoryState: String? = null
+    private var lastConnectionHistoryStatus: ConnectionStatus? = null
     private var localProximityNear: Boolean? = null
     private var mqttForcedSleep = false
+    private var lastAutomaticUpdateCheckElapsed = 0L
 
     init {
         viewModelScope.launch {
@@ -130,6 +166,14 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 mqttDeviceBridge.applySettings(current)
                 if (current != null && !_editing.value) {
                     connect(current)
+                    loadHouseSummary(showSpinner = _houseSummary.value.summary == null)
+                    if (current.updateChecksEnabled &&
+                        (lastAutomaticUpdateCheckElapsed == 0L ||
+                            SystemClock.elapsedRealtime() - lastAutomaticUpdateCheckElapsed > UPDATE_CHECK_INTERVAL_MS)
+                    ) {
+                        lastAutomaticUpdateCheckElapsed = SystemClock.elapsedRealtime()
+                        checkForUpdates(showSpinner = false)
+                    }
                 } else if (current == null) {
                     socketClient.disconnect()
                 }
@@ -167,6 +211,15 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
 
         viewModelScope.launch {
+            while (isActive) {
+                if (_settings.value != null && !_editing.value) {
+                    loadHouseSummary(showSpinner = _houseSummary.value.summary == null)
+                }
+                delay(HOUSE_SUMMARY_REFRESH_INTERVAL_MS)
+            }
+        }
+
+        viewModelScope.launch {
             socketClient.state.collect { state ->
                 if (state.status == ConnectionStatus.ERROR || state.status == ConnectionStatus.DISCONNECTED) {
                     delay(RECONNECT_DELAY_MS)
@@ -178,6 +231,51 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     ) {
                         connect(currentSettings)
                     }
+                }
+            }
+        }
+
+        viewModelScope.launch {
+            socketClient.entityEvents.collect { event ->
+                val normalized = event.state.lowercase()
+                val message = when {
+                    event.entityId.startsWith("light.") -> "${event.friendlyName}: ${if (normalized == "on") "on" else "off"}"
+                    event.entityId.startsWith("person.") -> "${event.friendlyName}: $normalized"
+                    event.deviceClass in setOf("door", "garage_door", "opening") ->
+                        "${event.friendlyName}: ${if (normalized in setOf("on", "open")) "open" else "closed"}"
+                    event.deviceClass == "window" ->
+                        "${event.friendlyName}: ${if (normalized in setOf("on", "open")) "open" else "closed"}"
+                    event.deviceClass in setOf("motion", "occupancy") ->
+                        "${event.friendlyName}: ${if (normalized == "on") "detected" else "clear"}"
+                    else -> "${event.friendlyName}: $normalized"
+                }
+                historyRepository.add("entity", message)
+                loadHouseSummary(showSpinner = false)
+            }
+        }
+
+        viewModelScope.launch {
+            socketClient.state.collect { state ->
+                if (state.status != lastConnectionHistoryStatus) {
+                    if (lastConnectionHistoryStatus != null) {
+                        historyRepository.add("connection", "Home Assistant: ${state.status.name.lowercase()}")
+                    }
+                    lastConnectionHistoryStatus = state.status
+                }
+
+                val alarmState = state.alarm?.state
+                if (!alarmState.isNullOrBlank() && alarmState != lastAlarmHistoryState) {
+                    historyRepository.add("alarm", "Alarm: ${alarmState.replace('_', ' ')}")
+                    lastAlarmHistoryState = alarmState
+                }
+
+                val code = state.guestVoucher?.code?.takeIf { it.isNotBlank() }
+                if (code != historyGuestVoucherCode) {
+                    when {
+                        code != null -> historyRepository.add("guest", "Guest Wi-Fi voucher created")
+                        historyGuestVoucherCode != null -> historyRepository.add("guest", "Guest Wi-Fi voucher removed")
+                    }
+                    historyGuestVoucherCode = code
                 }
             }
         }
@@ -201,7 +299,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun onCameraPermissionResult(granted: Boolean) {
         val current = _settings.value ?: return
         if (granted && current.rtspEnabled) {
-            rtspCameraServer.start(current.rtspPort)
+            rtspCameraServer.start(current.rtspPort, current.rtspAdvertisedHost)
         }
     }
 
@@ -219,8 +317,61 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         connect(current)
         if (current.rtspEnabled) {
             rtspCameraServer.stop()
-            rtspCameraServer.start(current.rtspPort)
+            rtspCameraServer.start(current.rtspPort, current.rtspAdvertisedHost)
         }
+    }
+
+    fun onAmbientLightChanged(lux: Float) {
+        _ambientLux.value = lux.coerceAtLeast(0f)
+        publishDeviceTelemetry()
+    }
+
+    fun checkForUpdates(showSpinner: Boolean = true) {
+        if (_update.value.isLoading || _update.value.isDownloading) return
+        viewModelScope.launch {
+            if (showSpinner) _update.value = _update.value.copy(isLoading = true, errorMessage = null)
+            runCatching { updateClient.checkLatest() }
+                .onSuccess { info -> _update.value = UpdateUiState(info = info) }
+                .onFailure { error ->
+                    _update.value = _update.value.copy(
+                        isLoading = false,
+                        errorMessage = error.message ?: "Could not check for updates"
+                    )
+                }
+        }
+    }
+
+    fun downloadUpdate() {
+        val url = _update.value.info?.apkDownloadUrl ?: run {
+            _update.value = _update.value.copy(errorMessage = "The GitHub release has no APK asset")
+            return
+        }
+        if (_update.value.isDownloading) return
+        viewModelScope.launch {
+            _update.value = _update.value.copy(isDownloading = true, errorMessage = null, installerUri = null)
+            runCatching { updateClient.downloadApk(url) }
+                .onSuccess { uri ->
+                    _update.value = _update.value.copy(isDownloading = false, installerUri = uri)
+                    historyRepository.add("update", "HomePanel update downloaded")
+                }
+                .onFailure { error ->
+                    _update.value = _update.value.copy(
+                        isDownloading = false,
+                        errorMessage = error.message ?: "Could not download update"
+                    )
+                }
+        }
+    }
+
+    fun consumeInstallerUri() {
+        _update.value = _update.value.copy(installerUri = null)
+    }
+
+    fun clearHistory() = historyRepository.clear()
+
+    fun refreshHouseSummary() {
+        userActivity()
+        loadHouseSummary(showSpinner = _houseSummary.value.summary == null)
     }
 
     fun refreshDeviceLocation() {
@@ -291,7 +442,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             wakeEntityId = draft.wakeEntityId?.trim()?.takeIf { it.isNotBlank() },
             screensaverTimeoutMinutes = normalizedSaver,
             sleepTimeoutMinutes = normalizedSleep,
+            settingsPin = draft.settingsPin.trim().filter(Char::isDigit).take(8),
             rtspPort = draft.rtspPort.coerceIn(1024, 65535),
+            rtspAdvertisedHost = draft.rtspAdvertisedHost.trim()
+                .removePrefix("rtsp://")
+                .substringBefore(':')
+                .trim('/'),
             guestVoucherSensorEntityId = draft.guestVoucherSensorEntityId?.trim()?.takeIf { it.isNotBlank() },
             guestCreateButtonEntityId = draft.guestCreateButtonEntityId?.trim()?.takeIf { it.isNotBlank() },
             guestDeleteButtonEntityId = draft.guestDeleteButtonEntityId?.trim()?.takeIf { it.isNotBlank() },
@@ -459,12 +615,37 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         mqttDeviceBridge.publishTelemetry(
             telemetryReader.read(
                 proximityNear = localProximityNear,
+                ambientLightLux = _ambientLux.value,
                 displayMode = _displayMode.value.name.lowercase(),
                 rtspRunning = rtsp.running,
                 rtspClients = rtsp.clientCount,
                 rtspUrl = rtsp.endpoint
             )
         )
+    }
+
+    private fun loadHouseSummary(showSpinner: Boolean) {
+        val current = _settings.value ?: return
+        if (_houseSummary.value.isLoading) return
+        viewModelScope.launch {
+            // Mark every request as in-flight so periodic refreshes and WebSocket events cannot
+            // fan out into overlapping /api/states calls. The UI may decide whether to render
+            // the spinner, but the concurrency guard always remains active.
+            _houseSummary.value = _houseSummary.value.copy(
+                isLoading = true,
+                errorMessage = if (showSpinner) null else _houseSummary.value.errorMessage
+            )
+            runCatching { restClient.fetchHouseSummary(current.baseUrl, current.accessToken) }
+                .onSuccess { summary ->
+                    _houseSummary.value = HouseSummaryUiState(summary = summary)
+                }
+                .onFailure { error ->
+                    _houseSummary.value = _houseSummary.value.copy(
+                        isLoading = false,
+                        errorMessage = error.message ?: "Could not load house status"
+                    )
+                }
+        }
     }
 
     private suspend fun loadWeather(showSpinner: Boolean) {
@@ -499,7 +680,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     private fun applyRtspSettings(settings: PanelSettings?) {
         if (settings?.rtspEnabled == true) {
-            rtspCameraServer.start(settings.rtspPort)
+            rtspCameraServer.start(settings.rtspPort, settings.rtspAdvertisedHost)
         } else {
             rtspCameraServer.stop()
         }
@@ -516,6 +697,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     companion object {
         private const val WEATHER_REFRESH_INTERVAL_MS = 30L * 60L * 1000L
+        private const val HOUSE_SUMMARY_REFRESH_INTERVAL_MS = 20_000L
+        private const val UPDATE_CHECK_INTERVAL_MS = 6L * 60L * 60L * 1000L
         private const val RECONNECT_DELAY_MS = 5_000L
     }
 }

@@ -361,6 +361,20 @@ class MqttDeviceBridge(
                 .put("device", device)
         )
         discovery(
+            mqttClient, "sensor", "illuminance",
+            JSONObject()
+                .put("name", "Ambient light")
+                .put("unique_id", "${deviceIdentifier}_illuminance")
+                .put("default_entity_id", "sensor.homepanel_illuminance")
+                .put("state_topic", "$baseTopic/illuminance")
+                .put("device_class", "illuminance")
+                .put("unit_of_measurement", "lx")
+                .put("state_class", "measurement")
+                .put("icon", "mdi:brightness-6")
+                .put("availability_topic", availabilityTopic)
+                .put("device", device)
+        )
+        discovery(
             mqttClient, "switch", "screen",
             JSONObject()
                 .put("name", "Screen")
@@ -432,6 +446,7 @@ class MqttDeviceBridge(
             "sensor" to "battery_temperature",
             "binary_sensor" to "charging",
             "binary_sensor" to "proximity",
+            "sensor" to "illuminance",
             "switch" to "screen",
             "sensor" to "display_mode",
             "binary_sensor" to "rtsp",
@@ -466,6 +481,9 @@ class MqttDeviceBridge(
         }
         telemetry.charging?.let { publish(mqttClient, "$baseTopic/charging", if (it) "ON" else "OFF", true) }
         telemetry.proximityNear?.let { publish(mqttClient, "$baseTopic/proximity", if (it) "ON" else "OFF", true) }
+        telemetry.ambientLightLux?.let {
+            publish(mqttClient, "$baseTopic/illuminance", String.format(Locale.US, "%.1f", it), true)
+        }
         publish(mqttClient, "$baseTopic/display_mode", telemetry.displayMode, true)
         publish(mqttClient, "$baseTopic/screen/state", if (telemetry.displayMode == "sleep") "OFF" else "ON", true)
         publish(mqttClient, "$baseTopic/rtsp/running", if (telemetry.rtspRunning) "ON" else "OFF", true)

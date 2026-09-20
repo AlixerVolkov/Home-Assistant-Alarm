@@ -3,28 +3,23 @@ package dev.homepanel.app.camera
 import android.Manifest
 import android.content.Context
 import android.content.pm.PackageManager
+import android.net.ConnectivityManager
 import androidx.core.content.ContextCompat
 import com.pedro.common.ConnectChecker
 import com.pedro.common.VideoCodec
 import com.pedro.encoder.input.video.CameraHelper
 import com.pedro.rtspserver.RtspServerCamera2
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
 import java.net.Inet4Address
 import java.net.NetworkInterface
 import java.util.Collections
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 
-/**
- * Small lifecycle wrapper around RootEncoder's RTSP-Server plugin.
- *
- * HomePanel uses the background Camera2 constructor because the tablet is a wall panel and we do
- * not need a local camera preview. Audio is deliberately disabled: this avoids microphone
- * permissions and makes the feature a privacy-friendlier front-camera video feed.
- */
 class RtspCameraServer(private val context: Context) : ConnectChecker {
     private var server: RtspServerCamera2? = null
     private var activePort: Int = DEFAULT_PORT
+    private var advertisedHostOverride: String = ""
 
     private val _state = MutableStateFlow(RtspCameraState())
     val state: StateFlow<RtspCameraState> = _state.asStateFlow()
@@ -33,13 +28,19 @@ class RtspCameraServer(private val context: Context) : ConnectChecker {
         ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED
 
     @Synchronized
-    fun start(port: Int = DEFAULT_PORT) {
+    fun start(port: Int = DEFAULT_PORT, advertisedHost: String = "") {
         val safePort = port.coerceIn(1024, 65535)
+        val normalizedOverride = advertisedHost.trim().removePrefix("rtsp://").substringBefore(':').trim('/')
+        advertisedHostOverride = normalizedOverride
+
         if (!hasCameraPermission()) {
             _state.value = RtspCameraState(
                 enabled = true,
                 permissionRequired = true,
                 port = safePort,
+                endpoint = buildEndpoint(safePort),
+                ipv4Address = preferredIpv4Address()?.first,
+                interfaceName = preferredIpv4Address()?.second,
                 errorMessage = "Camera permission is required for the RTSP server"
             )
             return
@@ -57,9 +58,6 @@ class RtspCameraServer(private val context: Context) : ConnectChecker {
             val cameraServer = RtspServerCamera2(context.applicationContext, this, safePort)
             cameraServer.streamClient.setOnlyVideo(true)
             cameraServer.setVideoCodec(VideoCodec.H264)
-
-            // In Camera2 background mode startPreview does not render a preview; it selects which
-            // camera will be opened by startStream().
             cameraServer.startPreview(CameraHelper.Facing.FRONT)
 
             val rotation = CameraHelper.getCameraOrientation(context)
@@ -75,22 +73,27 @@ class RtspCameraServer(private val context: Context) : ConnectChecker {
 
             server = cameraServer
             cameraServer.startStream()
-            val endpoint = preferredIpv4Endpoint(safePort)
-                ?: cameraServer.streamClient.getEndPointConnection()
+            val ipv4 = preferredIpv4Address()
             _state.value = RtspCameraState(
                 enabled = true,
                 running = true,
                 port = safePort,
-                endpoint = endpoint,
+                endpoint = buildEndpoint(safePort) ?: cameraServer.streamClient.getEndPointConnection(),
+                ipv4Address = ipv4?.first,
+                interfaceName = ipv4?.second,
                 clientCount = cameraServer.streamClient.getNumClients()
             )
         }.onFailure { error ->
             runCatching { server?.stopStream() }
             server = null
+            val ipv4 = preferredIpv4Address()
             _state.value = RtspCameraState(
                 enabled = true,
                 running = false,
                 port = safePort,
+                endpoint = buildEndpoint(safePort),
+                ipv4Address = ipv4?.first,
+                interfaceName = ipv4?.second,
                 errorMessage = error.message ?: "Could not start the RTSP camera server"
             )
         }
@@ -101,35 +104,70 @@ class RtspCameraServer(private val context: Context) : ConnectChecker {
         val current = server
         server = null
         if (current != null) {
-            runCatching {
-                if (current.isStreaming) current.stopStream()
-            }
+            runCatching { if (current.isStreaming) current.stopStream() }
         }
-        _state.value = RtspCameraState(enabled = false, port = activePort)
+        val ipv4 = preferredIpv4Address()
+        _state.value = RtspCameraState(
+            enabled = false,
+            port = activePort,
+            endpoint = buildEndpoint(activePort),
+            ipv4Address = ipv4?.first,
+            interfaceName = ipv4?.second
+        )
     }
 
     fun refreshStats() {
-        val current = server ?: return
+        val current = server ?: run {
+            val ipv4 = preferredIpv4Address()
+            _state.value = _state.value.copy(
+                endpoint = buildEndpoint(activePort),
+                ipv4Address = ipv4?.first,
+                interfaceName = ipv4?.second
+            )
+            return
+        }
+        val ipv4 = preferredIpv4Address()
         _state.value = _state.value.copy(
             running = current.isStreaming,
-            endpoint = preferredIpv4Endpoint(activePort)
+            endpoint = buildEndpoint(activePort)
                 ?: runCatching { current.streamClient.getEndPointConnection() }.getOrNull(),
+            ipv4Address = ipv4?.first,
+            interfaceName = ipv4?.second,
             clientCount = runCatching { current.streamClient.getNumClients() }.getOrDefault(0)
         )
     }
 
-    /**
-     * RootEncoder can report an IPv6 ULA first on dual-stack Wi-Fi networks. The RTSP server
-     * itself listens on the device, so expose an IPv4 LAN address when one exists; this is easier
-     * to consume from Frigate/go2rtc and avoids malformed unbracketed IPv6 RTSP URLs.
-     */
-    private fun preferredIpv4Endpoint(port: Int): String? {
+    fun frigateConfig(cameraName: String = "homepanel_front"): String? {
+        val endpoint = _state.value.endpoint ?: return null
+        return """go2rtc:
+  streams:
+    $cameraName: $endpoint
+
+cameras:
+  $cameraName:
+    ffmpeg:
+      inputs:
+        - path: rtsp://127.0.0.1:8554/$cameraName
+          input_args: preset-rtsp-restream
+          roles:
+            - detect
+    detect:
+      width: $DEFAULT_WIDTH
+      height: $DEFAULT_HEIGHT
+""".trim()
+    }
+
+    private fun buildEndpoint(port: Int): String? {
+        advertisedHostOverride.takeIf { it.isNotBlank() }?.let { return "rtsp://$it:$port/" }
+        return preferredIpv4Address()?.first?.let { "rtsp://$it:$port/" }
+    }
+
+    private fun preferredIpv4Address(): Pair<String, String>? {
+        preferredIpv4FromActiveNetwork()?.let { return it }
+
         val interfaces = runCatching { Collections.list(NetworkInterface.getNetworkInterfaces()) }
-            .getOrNull()
-            .orEmpty()
-            .filter { network ->
-                runCatching { network.isUp && !network.isLoopback }.getOrDefault(false)
-            }
+            .getOrNull().orEmpty()
+            .filter { network -> runCatching { network.isUp && !network.isLoopback }.getOrDefault(false) }
             .sortedBy { network ->
                 when {
                     network.name.startsWith("wlan", ignoreCase = true) -> 0
@@ -138,40 +176,45 @@ class RtspCameraServer(private val context: Context) : ConnectChecker {
                 }
             }
 
-        val candidates = interfaces.flatMap { network ->
-            runCatching { Collections.list(network.inetAddresses) }.getOrDefault(emptyList())
-        }.filterIsInstance<Inet4Address>()
-            .filter { !it.isLoopbackAddress && !it.isLinkLocalAddress }
+        interfaces.forEach { network ->
+            val addresses = runCatching { Collections.list(network.inetAddresses) }.getOrDefault(emptyList())
+            val candidate = addresses.filterIsInstance<Inet4Address>()
+                .firstOrNull { !it.isLoopbackAddress && !it.isLinkLocalAddress && it.isSiteLocalAddress }
+                ?: addresses.filterIsInstance<Inet4Address>()
+                    .firstOrNull { !it.isLoopbackAddress && !it.isLinkLocalAddress }
+            if (candidate != null) return candidate.hostAddress to network.name
+        }
+        return null
+    }
 
-        val preferred = candidates.firstOrNull { it.isSiteLocalAddress } ?: candidates.firstOrNull()
-        return preferred?.hostAddress?.let { "rtsp://$it:$port/" }
+    private fun preferredIpv4FromActiveNetwork(): Pair<String, String>? {
+        val manager = context.getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager ?: return null
+        val network = manager.activeNetwork ?: return null
+        val properties = manager.getLinkProperties(network) ?: return null
+        val address = properties.linkAddresses
+            .map { it.address }
+            .filterIsInstance<Inet4Address>()
+            .firstOrNull { !it.isLoopbackAddress && !it.isLinkLocalAddress && it.isSiteLocalAddress }
+            ?: properties.linkAddresses
+                .map { it.address }
+                .filterIsInstance<Inet4Address>()
+                .firstOrNull { !it.isLoopbackAddress && !it.isLinkLocalAddress }
+            ?: return null
+        return address.hostAddress to (properties.interfaceName ?: "active")
     }
 
     override fun onConnectionStarted(url: String) = Unit
-
-    override fun onConnectionSuccess() {
-        refreshStats()
-    }
-
-    override fun onNewBitrate(bitrate: Long) {
-        _state.value = _state.value.copy(bitrateBps = bitrate)
-    }
-
-    override fun onConnectionFailed(reason: String) {
-        _state.value = _state.value.copy(errorMessage = reason)
-    }
-
-    override fun onDisconnect() {
-        refreshStats()
-    }
-
+    override fun onConnectionSuccess() = refreshStats()
+    override fun onNewBitrate(bitrate: Long) { _state.value = _state.value.copy(bitrateBps = bitrate) }
+    override fun onConnectionFailed(reason: String) { _state.value = _state.value.copy(errorMessage = reason) }
+    override fun onDisconnect() = refreshStats()
     override fun onAuthError() = Unit
     override fun onAuthSuccess() = Unit
 
     companion object {
         const val DEFAULT_PORT = 8554
-        private const val DEFAULT_WIDTH = 1280
-        private const val DEFAULT_HEIGHT = 720
+        const val DEFAULT_WIDTH = 1280
+        const val DEFAULT_HEIGHT = 720
         private const val DEFAULT_FPS = 15
         private const val DEFAULT_BITRATE = 1_500_000
         private const val DEFAULT_IFRAME_INTERVAL = 2
@@ -184,6 +227,8 @@ data class RtspCameraState(
     val permissionRequired: Boolean = false,
     val port: Int = RtspCameraServer.DEFAULT_PORT,
     val endpoint: String? = null,
+    val ipv4Address: String? = null,
+    val interfaceName: String? = null,
     val clientCount: Int = 0,
     val bitrateBps: Long = 0L,
     val errorMessage: String? = null
