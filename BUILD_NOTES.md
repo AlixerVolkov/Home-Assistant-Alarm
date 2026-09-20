@@ -1,3 +1,9 @@
+# Build notes v0.4.1
+
+The GitHub Actions failure in v0.4.0 was a Kotlin type mismatch in `HomeAssistantRestClient.kt`: two calls passed OkHttp `HttpUrl` values into a helper declared with `String`. The helper now accepts `HttpUrl`.
+
+This environment does not contain a complete Android SDK/Gradle toolchain, so the final `assembleRelease` verification is performed by the repository GitHub Actions workflow.
+
 # Build notes — HomePanel v0.4.0
 
 El workflow incluido compila `:app:assembleRelease` con JDK 17, Gradle 9.6, AGP 9.4 y Android SDK 37.0, restaura la misma clave release desde GitHub Secrets y verifica el APK con `apksigner`.

@@ -2,6 +2,7 @@ package dev.homepanel.app.network
 
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import okhttp3.HttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import org.json.JSONArray
@@ -119,7 +120,7 @@ class HomeAssistantRestClient(
         }
     }
 
-    private fun authenticatedRequest(url: String, accessToken: String): Request.Builder =
+    private fun authenticatedRequest(url: HttpUrl, accessToken: String): Request.Builder =
         Request.Builder()
             .url(url)
             .header("Authorization", "Bearer ${accessToken.trim()}")

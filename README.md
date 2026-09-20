@@ -1,8 +1,8 @@
-# HomePanel v0.4.0
+# HomePanel v0.4.1
 
 Panel Android moderno para Home Assistant / Alarmo, pensado para tablets de pared.
 
-## Novedades v0.4.0
+## Novedades v0.4.1
 
 - **Cámara frontal RTSP** opcional, solo vídeo, por defecto en el puerto `8554`.
 - El panel muestra la URL `rtsp://...` y el número de clientes conectados.
@@ -53,7 +53,7 @@ La aplicación conserva:
 ```text
 applicationId = dev.homepanel.app
 versionCode = 6
-versionName = 0.4.0
+versionName = 0.4.1
 ```
 
 El workflow de GitHub Actions genera un APK release firmado usando los mismos cuatro secrets de firma de v0.3.1:
@@ -66,12 +66,12 @@ El workflow de GitHub Actions genera un APK release firmado usando los mismos cu
 Artefacto esperado:
 
 ```text
-HomePanel-v0.4.0-signed-apk
-└── HomePanel-v0.4.0.apk
+HomePanel-v0.4.1-signed-apk
+└── HomePanel-v0.4.1.apk
 ```
 
 No cambies ni pierdas el `.jks`: las actualizaciones Android requieren la misma clave de firma.
 
 ## Seguridad
 
-El token de Home Assistant se almacena cifrado mediante Android Keystore. Usa HTTPS/WSS para Home Assistant siempre que sea posible. RTSP v0.4.0 es un stream local sin TLS ni autenticación; úsalo solo en una LAN/VLAN de confianza.
+El token de Home Assistant se almacena cifrado mediante Android Keystore. Usa HTTPS/WSS para Home Assistant siempre que sea posible. RTSP v0.4.1 es un stream local sin TLS ni autenticación; úsalo solo en una LAN/VLAN de confianza.
