@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">HomePanel</string>
+    <string name="setup_title">Conectar con Home Assistant</string>
+    <string name="setup_subtitle">Introduce la URL de Home Assistant y un token de acceso de larga duraci&#243;n; despu&#233;s detecta las entidades de alarma.</string>
+    <string name="ha_url">URL de Home Assistant</string>
+    <string name="access_token">Token de acceso</string>
+    <string name="discover_alarms">Detectar alarmas</string>
+    <string name="discovering">Buscando...</string>
+    <string name="select_alarm">Selecciona una alarma</string>
+    <string name="save_connect">Guardar y conectar</string>
+    <string name="no_alarms">No se encontraron entidades alarm_control_panel.</string>
+    <string name="http_warning">Aviso: HTTP env&#237;a el token sin cifrado de transporte. Es preferible HTTPS/WSS.</string>
+    <string name="status_connecting">Conectando</string>
+    <string name="status_connected">Conectado</string>
+    <string name="status_disconnected">Desconectado</string>
+    <string name="status_error">Error de conexi&#243;n</string>
+    <string name="reconnect">Reconectar</string>
+    <string name="settings">Ajustes</string>
+    <string name="pin">PIN / c&#243;digo</string>
+    <string name="disarm">Desarmar</string>
+    <string name="arm_home">Armar en casa</string>
+    <string name="arm_away">Armar fuera</string>
+    <string name="arm_night">Armar noche</string>
+    <string name="arm_vacation">Vacaciones</string>
+    <string name="arm_custom">Bypass personalizado</string>
+    <string name="state_disarmed">Desarmada</string>
+    <string name="state_armed_home">Armada en casa</string>
+    <string name="state_armed_away">Armada fuera</string>
+    <string name="state_armed_night">Armada de noche</string>
+    <string name="state_armed_vacation">Modo vacaciones</string>
+    <string name="state_armed_custom">Bypass personalizado</string>
+    <string name="state_pending">Pendiente</string>
+    <string name="state_arming">Armando</string>
+    <string name="state_disarming">Desarmando</string>
+    <string name="state_triggered">ALARMA ACTIVADA</string>
+    <string name="state_unknown">Desconocido</string>
+    <string name="entity">Entidad</string>
+    <string name="friendly_name">Nombre</string>
+    <string name="clear_config">Borrar configuraci&#243;n</string>
+    <string name="cancel">Cancelar</string>
+</resources>
