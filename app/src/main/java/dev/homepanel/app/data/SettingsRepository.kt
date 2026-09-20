@@ -2,6 +2,7 @@ package dev.homepanel.app.data
 
 import android.content.Context
 import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import dev.homepanel.app.security.CryptoManager
@@ -27,7 +28,10 @@ class SettingsRepository(
             PanelSettings(
                 baseUrl = baseUrl,
                 accessToken = token,
-                alarmEntityId = alarmEntityId
+                alarmEntityId = alarmEntityId,
+                wakeEntityId = preferences[KEY_WAKE_ENTITY]?.takeIf { it.isNotBlank() },
+                screensaverTimeoutMinutes = preferences[KEY_SCREENSAVER_MINUTES] ?: 2,
+                sleepTimeoutMinutes = preferences[KEY_SLEEP_MINUTES] ?: 10
             )
         }
         .catch { emit(null) }
@@ -37,6 +41,9 @@ class SettingsRepository(
             preferences[KEY_BASE_URL] = settings.baseUrl.trim().trimEnd('/')
             preferences[KEY_ACCESS_TOKEN] = cryptoManager.encrypt(settings.accessToken.trim())
             preferences[KEY_ALARM_ENTITY] = settings.alarmEntityId.trim()
+            preferences[KEY_WAKE_ENTITY] = settings.wakeEntityId?.trim().orEmpty()
+            preferences[KEY_SCREENSAVER_MINUTES] = settings.screensaverTimeoutMinutes.coerceAtLeast(0)
+            preferences[KEY_SLEEP_MINUTES] = settings.sleepTimeoutMinutes.coerceAtLeast(0)
         }
     }
 
@@ -45,6 +52,9 @@ class SettingsRepository(
             preferences.remove(KEY_BASE_URL)
             preferences.remove(KEY_ACCESS_TOKEN)
             preferences.remove(KEY_ALARM_ENTITY)
+            preferences.remove(KEY_WAKE_ENTITY)
+            preferences.remove(KEY_SCREENSAVER_MINUTES)
+            preferences.remove(KEY_SLEEP_MINUTES)
         }
     }
 
@@ -52,5 +62,8 @@ class SettingsRepository(
         private val KEY_BASE_URL = stringPreferencesKey("base_url")
         private val KEY_ACCESS_TOKEN = stringPreferencesKey("access_token")
         private val KEY_ALARM_ENTITY = stringPreferencesKey("alarm_entity_id")
+        private val KEY_WAKE_ENTITY = stringPreferencesKey("wake_entity_id")
+        private val KEY_SCREENSAVER_MINUTES = intPreferencesKey("screensaver_minutes")
+        private val KEY_SLEEP_MINUTES = intPreferencesKey("sleep_minutes")
     }
 }

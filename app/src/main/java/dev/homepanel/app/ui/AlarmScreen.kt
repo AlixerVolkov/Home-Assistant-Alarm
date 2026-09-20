@@ -1,7 +1,9 @@
 package dev.homepanel.app.ui
 
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -9,9 +11,14 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -68,60 +75,86 @@ fun AlarmScreen(
     val alarm = connectionState.alarm
     var pinAction by remember { mutableStateOf<AlarmAction?>(null) }
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(horizontal = 20.dp, vertical = 14.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
-    ) {
-        DashboardHeader(
-            alarm = alarm,
-            fallbackName = settings.alarmEntityId,
-            connectionState = connectionState,
-            weatherState = weatherState,
-            onReconnect = onReconnect,
-            onRefreshWeather = onRefreshWeather,
-            onSettings = onSettings
-        )
+    BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
+        val compact = maxWidth < 720.dp || maxHeight < 520.dp
+        val outerPadding = if (maxWidth < 480.dp) 10.dp else 16.dp
 
-        val error = connectionState.actionErrorMessage ?: connectionState.errorMessage
-        if (!error.isNullOrBlank()) {
-            ErrorBanner(error)
-        }
-
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .weight(1f),
-            horizontalArrangement = Arrangement.spacedBy(14.dp)
-        ) {
-            AlarmStateCard(
-                alarm = alarm,
+        if (compact) {
+            Column(
                 modifier = Modifier
-                    .weight(0.9f)
-                    .fillMaxHeight()
-            )
-
-            AlarmActionsPanel(
-                alarm = alarm,
-                connectionState = connectionState,
-                modifier = Modifier
-                    .weight(1.6f)
-                    .fillMaxHeight(),
-                onActionRequested = { action ->
-                    if (alarm?.requiresCode(action) == true) {
-                        pinAction = action
-                    } else {
-                        onAction(action, null)
+                    .fillMaxSize()
+                    .verticalScroll(rememberScrollState())
+                    .padding(outerPadding),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                DashboardHeader(
+                    alarm = alarm,
+                    fallbackName = settings.alarmEntityId,
+                    connectionState = connectionState,
+                    weatherState = weatherState,
+                    compact = true,
+                    onReconnect = onReconnect,
+                    onRefreshWeather = onRefreshWeather,
+                    onSettings = onSettings
+                )
+                ErrorBlock(connectionState)
+                AlarmStateCard(alarm = alarm, modifier = Modifier.fillMaxWidth())
+                AlarmActionsPanel(
+                    alarm = alarm,
+                    connectionState = connectionState,
+                    compact = true,
+                    modifier = Modifier.fillMaxWidth(),
+                    onActionRequested = { action ->
+                        if (alarm?.requiresCode(action) == true) pinAction = action else onAction(action, null)
                     }
+                )
+                ForecastStrip(weatherState, onRefreshWeather)
+            }
+        } else {
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(horizontal = outerPadding, vertical = 12.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                DashboardHeader(
+                    alarm = alarm,
+                    fallbackName = settings.alarmEntityId,
+                    connectionState = connectionState,
+                    weatherState = weatherState,
+                    compact = false,
+                    onReconnect = onReconnect,
+                    onRefreshWeather = onRefreshWeather,
+                    onSettings = onSettings
+                )
+                ErrorBlock(connectionState)
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .weight(1f),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    AlarmStateCard(
+                        alarm = alarm,
+                        modifier = Modifier
+                            .weight(0.85f)
+                            .fillMaxHeight()
+                    )
+                    AlarmActionsPanel(
+                        alarm = alarm,
+                        connectionState = connectionState,
+                        compact = false,
+                        modifier = Modifier
+                            .weight(1.65f)
+                            .fillMaxHeight(),
+                        onActionRequested = { action ->
+                            if (alarm?.requiresCode(action) == true) pinAction = action else onAction(action, null)
+                        }
+                    )
                 }
-            )
+                ForecastStrip(weatherState, onRefreshWeather)
+            }
         }
-
-        ForecastStrip(
-            weatherState = weatherState,
-            onRefresh = onRefreshWeather
-        )
     }
 
     pinAction?.let { action ->
@@ -138,113 +171,124 @@ fun AlarmScreen(
 }
 
 @Composable
+private fun ErrorBlock(connectionState: HomeAssistantConnectionState) {
+    val error = connectionState.actionErrorMessage ?: connectionState.errorMessage
+    if (!error.isNullOrBlank()) ErrorBanner(error)
+}
+
+@Composable
 private fun DashboardHeader(
     alarm: AlarmEntityState?,
     fallbackName: String,
     connectionState: HomeAssistantConnectionState,
     weatherState: WeatherUiState,
+    compact: Boolean,
     onReconnect: () -> Unit,
     onRefreshWeather: () -> Unit,
     onSettings: () -> Unit
 ) {
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(16.dp)
-    ) {
-        Column(modifier = Modifier.weight(1.15f)) {
-            Text(
-                text = alarm?.friendlyName ?: fallbackName,
-                style = MaterialTheme.typography.headlineSmall,
-                fontWeight = FontWeight.SemiBold
+    if (compact) {
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = alarm?.friendlyName ?: fallbackName,
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                    ConnectionChip(connectionState.status, onReconnect)
+                }
+                ClockBlock(weatherState = weatherState)
+                IconButton(onClick = onSettings) {
+                    Text("⚙️", style = MaterialTheme.typography.headlineSmall)
+                }
+            }
+            CurrentWeatherBlock(
+                weatherState = weatherState,
+                modifier = Modifier.fillMaxWidth(),
+                onRefresh = onRefreshWeather
             )
-            Spacer(Modifier.height(4.dp))
-            ConnectionChip(connectionState.status, onReconnect)
         }
-
-        ClockBlock(modifier = Modifier.weight(0.85f))
-
-        CurrentWeatherBlock(
-            weatherState = weatherState,
-            modifier = Modifier.weight(1.15f),
-            onRefresh = onRefreshWeather
-        )
-
-        IconButton(onClick = onSettings) {
-            Text(
-                text = "⚙️",
-                style = MaterialTheme.typography.headlineMedium
+    } else {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(14.dp)
+        ) {
+            Column(modifier = Modifier.weight(1.1f)) {
+                Text(
+                    text = alarm?.friendlyName ?: fallbackName,
+                    style = MaterialTheme.typography.headlineSmall,
+                    fontWeight = FontWeight.SemiBold
+                )
+                Spacer(Modifier.height(4.dp))
+                ConnectionChip(connectionState.status, onReconnect)
+            }
+            ClockBlock(weatherState = weatherState, modifier = Modifier.weight(0.85f))
+            CurrentWeatherBlock(
+                weatherState = weatherState,
+                modifier = Modifier.weight(1.25f),
+                onRefresh = onRefreshWeather
             )
+            IconButton(onClick = onSettings) {
+                Text("⚙️", style = MaterialTheme.typography.headlineMedium)
+            }
         }
     }
 }
 
 @Composable
-private fun ConnectionChip(
-    status: ConnectionStatus,
-    onReconnect: () -> Unit
-) {
+private fun ConnectionChip(status: ConnectionStatus, onReconnect: () -> Unit) {
     val connected = status == ConnectionStatus.CONNECTED
     Surface(
-        onClick = {
-            if (!connected && status != ConnectionStatus.CONNECTING) onReconnect()
-        },
+        onClick = { if (!connected && status != ConnectionStatus.CONNECTING) onReconnect() },
         shape = MaterialTheme.shapes.extraLarge,
-        color = if (connected) {
-            MaterialTheme.colorScheme.secondaryContainer
-        } else {
-            MaterialTheme.colorScheme.surfaceVariant
-        }
+        color = if (connected) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.surfaceVariant
     ) {
         Row(
-            modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp),
+            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(7.dp)
+            horizontalArrangement = Arrangement.spacedBy(6.dp)
         ) {
-            Text(
-                text = if (connected) "●" else "○",
-                style = MaterialTheme.typography.titleMedium
-            )
-            Text(
-                text = connectionStatusLabel(status),
-                style = MaterialTheme.typography.labelLarge
-            )
+            Text(if (connected) "●" else "○")
+            Text(connectionStatusLabel(status), style = MaterialTheme.typography.labelMedium)
         }
     }
 }
 
 @Composable
-private fun ClockBlock(modifier: Modifier = Modifier) {
-    var now by remember {
-        mutableStateOf(LocalDateTime.now(ZoneId.of("Europe/Brussels")))
+private fun ClockBlock(weatherState: WeatherUiState, modifier: Modifier = Modifier) {
+    val zoneId = remember(weatherState.forecast?.timezoneId) {
+        runCatching { ZoneId.of(weatherState.forecast?.timezoneId ?: ZoneId.systemDefault().id) }
+            .getOrDefault(ZoneId.systemDefault())
     }
+    var now by remember(zoneId) { mutableStateOf(LocalDateTime.now(zoneId)) }
 
-    LaunchedEffect(Unit) {
+    LaunchedEffect(zoneId) {
         while (true) {
-            now = LocalDateTime.now(ZoneId.of("Europe/Brussels"))
+            now = LocalDateTime.now(zoneId)
             delay(1_000L)
         }
     }
 
     val timeFormatter = remember { DateTimeFormatter.ofPattern("HH:mm") }
-    val dateFormatter = remember {
-        DateTimeFormatter.ofPattern("EEEE, d MMMM", Locale.getDefault())
+    val dateFormatter = remember(Locale.getDefault()) {
+        DateTimeFormatter.ofPattern("EEE, d MMM", Locale.getDefault())
     }
 
-    Column(
-        modifier = modifier,
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
+    Column(modifier = modifier, horizontalAlignment = Alignment.CenterHorizontally) {
         Text(
             text = now.format(timeFormatter),
-            style = MaterialTheme.typography.displaySmall,
+            style = MaterialTheme.typography.headlineMedium,
             fontWeight = FontWeight.Bold
         )
         Text(
-            text = now.format(dateFormatter).replaceFirstChar { char ->
-                if (char.isLowerCase()) char.titlecase(Locale.getDefault()) else char.toString()
-            },
-            style = MaterialTheme.typography.bodySmall,
+            text = now.format(dateFormatter),
+            style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             textAlign = TextAlign.Center
         )
@@ -257,7 +301,8 @@ private fun CurrentWeatherBlock(
     modifier: Modifier = Modifier,
     onRefresh: () -> Unit
 ) {
-    val current = weatherState.forecast?.current
+    val forecast = weatherState.forecast
+    val current = forecast?.current
 
     Surface(
         modifier = modifier,
@@ -265,57 +310,50 @@ private fun CurrentWeatherBlock(
         color = MaterialTheme.colorScheme.surfaceVariant
     ) {
         Row(
-            modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 9.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            if (current == null && weatherState.isLoading) {
-                CircularProgressIndicator(modifier = Modifier.size(28.dp), strokeWidth = 3.dp)
-                Spacer(Modifier.width(10.dp))
-                Text(stringResource(R.string.weather_loading))
-            } else if (current != null) {
-                Text(
-                    text = weatherEmoji(current.weatherCode),
-                    style = MaterialTheme.typography.headlineMedium
-                )
-                Spacer(Modifier.width(10.dp))
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = stringResource(R.string.weather_ekeren),
-                        style = MaterialTheme.typography.labelLarge
-                    )
-                    Text(
-                        text = "${current.temperatureC.roundToInt()}°C · ${weatherDescription(current.weatherCode)}",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.SemiBold
-                    )
-                    Text(
-                        text = stringResource(
-                            R.string.weather_feels_wind,
-                            current.apparentTemperatureC.roundToInt(),
-                            current.windSpeedKmh.roundToInt()
-                        ),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    Text(
-                        text = stringResource(R.string.weather_source),
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
+            when {
+                current == null && weatherState.isLoading -> {
+                    CircularProgressIndicator(modifier = Modifier.size(26.dp), strokeWidth = 3.dp)
+                    Spacer(Modifier.width(10.dp))
+                    Text(stringResource(R.string.weather_loading))
                 }
-                IconButton(onClick = onRefresh) {
-                    Text("↻", style = MaterialTheme.typography.titleLarge)
+                current != null -> {
+                    Text(weatherEmoji(current.weatherCode), style = MaterialTheme.typography.headlineMedium)
+                    Spacer(Modifier.width(10.dp))
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = forecast?.locationLabel.orEmpty(),
+                            style = MaterialTheme.typography.labelLarge,
+                            maxLines = 1
+                        )
+                        Text(
+                            text = "${current.temperatureC.roundToInt()}°C · ${weatherDescription(current.weatherCode)}",
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                        Text(
+                            text = stringResource(
+                                R.string.weather_feels_wind,
+                                current.apparentTemperatureC.roundToInt(),
+                                current.windSpeedKmh.roundToInt()
+                            ),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    IconButton(onClick = onRefresh) { Text("↻") }
                 }
-            } else {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(stringResource(R.string.weather_ekeren), style = MaterialTheme.typography.labelLarge)
-                    Text(
-                        text = stringResource(R.string.weather_unavailable),
-                        style = MaterialTheme.typography.bodyMedium
-                    )
-                }
-                IconButton(onClick = onRefresh) {
-                    Text("↻", style = MaterialTheme.typography.titleLarge)
+                else -> {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(stringResource(R.string.weather_auto_location), style = MaterialTheme.typography.labelLarge)
+                        Text(
+                            weatherState.errorMessage ?: stringResource(R.string.weather_unavailable),
+                            style = MaterialTheme.typography.bodySmall
+                        )
+                    }
+                    IconButton(onClick = onRefresh) { Text("↻") }
                 }
             }
         }
@@ -323,42 +361,31 @@ private fun CurrentWeatherBlock(
 }
 
 @Composable
-private fun AlarmStateCard(
-    alarm: AlarmEntityState?,
-    modifier: Modifier = Modifier
-) {
-    val state = alarm?.state
-    val containerColor = when (state) {
-        "triggered" -> MaterialTheme.colorScheme.errorContainer
-        "disarmed" -> MaterialTheme.colorScheme.secondaryContainer
-        "arming", "disarming", "pending" -> MaterialTheme.colorScheme.tertiaryContainer
-        else -> MaterialTheme.colorScheme.primaryContainer
-    }
-
+private fun AlarmStateCard(alarm: AlarmEntityState?, modifier: Modifier = Modifier) {
+    val triggered = alarm?.state == "triggered"
     Card(
-        modifier = modifier,
-        colors = CardDefaults.cardColors(containerColor = containerColor)
+        modifier = modifier.heightIn(min = 150.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = if (triggered) MaterialTheme.colorScheme.errorContainer else MaterialTheme.colorScheme.primaryContainer
+        )
     ) {
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(22.dp),
+                .padding(16.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center
         ) {
+            Text(stateIcon(alarm?.state), style = MaterialTheme.typography.displayMedium)
+            Spacer(Modifier.height(8.dp))
             Text(
-                text = stateIcon(state),
-                style = MaterialTheme.typography.displayLarge
-            )
-            Spacer(Modifier.height(12.dp))
-            Text(
-                text = alarmStateLabel(state),
-                style = MaterialTheme.typography.headlineMedium,
+                text = alarmStateLabel(alarm?.state),
+                style = MaterialTheme.typography.headlineSmall,
                 fontWeight = FontWeight.Bold,
                 textAlign = TextAlign.Center
             )
             alarm?.changedBy?.let { changedBy ->
-                Spacer(Modifier.height(8.dp))
+                Spacer(Modifier.height(6.dp))
                 Text(
                     text = stringResource(R.string.changed_by, changedBy),
                     style = MaterialTheme.typography.bodySmall,
@@ -373,6 +400,7 @@ private fun AlarmStateCard(
 private fun AlarmActionsPanel(
     alarm: AlarmEntityState?,
     connectionState: HomeAssistantConnectionState,
+    compact: Boolean,
     modifier: Modifier = Modifier,
     onActionRequested: (AlarmAction) -> Unit
 ) {
@@ -388,48 +416,46 @@ private fun AlarmActionsPanel(
     val globallyEnabled = connectionState.status == ConnectionStatus.CONNECTED &&
         alarm != null && connectionState.pendingAction == null
 
-    Column(
-        modifier = modifier,
-        verticalArrangement = Arrangement.spacedBy(10.dp)
-    ) {
-        connectionState.pendingAction?.let { pending ->
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.Center
-            ) {
-                CircularProgressIndicator(modifier = Modifier.size(22.dp), strokeWidth = 3.dp)
-                Spacer(Modifier.width(10.dp))
-                Text(
-                    text = stringResource(R.string.sending_action, alarmActionLabel(pending)),
-                    style = MaterialTheme.typography.titleSmall
-                )
-            }
+    BoxWithConstraints(modifier = modifier) {
+        val columns = when {
+            maxWidth < 360.dp -> 2
+            maxWidth < 620.dp -> 3
+            else -> 3
         }
+        val rows = actions.chunked(columns)
 
-        val rows = actions.chunked(3)
-        rows.forEach { rowActions ->
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .weight(1f),
-                horizontalArrangement = Arrangement.spacedBy(10.dp)
-            ) {
-                rowActions.forEach { action ->
-                    val active = alarm?.state == action.targetState
-                    val enabled = globallyEnabled && alarm?.canPerform(action) == true
-                    AlarmActionButton(
-                        action = action,
-                        active = active,
-                        enabled = enabled,
-                        modifier = Modifier
-                            .weight(1f)
-                            .fillMaxHeight(),
-                        onClick = { onActionRequested(action) }
-                    )
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            connectionState.pendingAction?.let { pending ->
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.Center
+                ) {
+                    CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 3.dp)
+                    Spacer(Modifier.width(8.dp))
+                    Text(stringResource(R.string.sending_action, alarmActionLabel(pending)))
                 }
-                repeat(3 - rowActions.size) {
-                    Spacer(modifier = Modifier.weight(1f))
+            }
+
+            rows.forEach { rowActions ->
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    rowActions.forEach { action ->
+                        val active = alarm?.state == action.targetState
+                        val enabled = globallyEnabled && alarm?.canPerform(action) == true
+                        AlarmActionButton(
+                            action = action,
+                            active = active,
+                            enabled = enabled,
+                            modifier = Modifier
+                                .weight(1f)
+                                .height(if (compact) 88.dp else 110.dp),
+                            onClick = { onActionRequested(action) }
+                        )
+                    }
+                    repeat(columns - rowActions.size) { Spacer(Modifier.weight(1f)) }
                 }
             }
         }
@@ -444,49 +470,49 @@ private fun AlarmActionButton(
     modifier: Modifier = Modifier,
     onClick: () -> Unit
 ) {
-    FilledTonalButton(
-        onClick = onClick,
-        enabled = enabled,
-        modifier = modifier
+    val colors = if (active) {
+        CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer)
+    } else {
+        CardDefaults.cardColors()
+    }
+
+    Card(
+        modifier = modifier,
+        colors = colors,
+        enabled = enabled || active,
+        onClick = { if (enabled) onClick() }
     ) {
         Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(8.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center
         ) {
-            Text(
-                text = alarmActionIcon(action),
-                style = MaterialTheme.typography.headlineMedium
-            )
-            Spacer(Modifier.height(7.dp))
+            Text(alarmActionIcon(action), style = MaterialTheme.typography.headlineMedium)
+            Spacer(Modifier.height(5.dp))
             Text(
                 text = alarmActionLabel(action),
                 textAlign = TextAlign.Center,
-                style = MaterialTheme.typography.titleSmall
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.SemiBold
             )
             if (active) {
-                Spacer(Modifier.height(3.dp))
-                Text(
-                    text = stringResource(R.string.current_mode),
-                    style = MaterialTheme.typography.labelSmall
-                )
+                Text(stringResource(R.string.current_mode), style = MaterialTheme.typography.labelSmall)
             }
         }
     }
 }
 
 @Composable
-private fun ForecastStrip(
-    weatherState: WeatherUiState,
-    onRefresh: () -> Unit
-) {
+private fun ForecastStrip(weatherState: WeatherUiState, onRefresh: () -> Unit) {
     val daily = weatherState.forecast?.daily.orEmpty()
-
     Card(modifier = Modifier.fillMaxWidth()) {
         if (daily.isEmpty()) {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 12.dp),
+                    .padding(horizontal = 14.dp, vertical = 10.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
@@ -494,19 +520,18 @@ private fun ForecastStrip(
                     modifier = Modifier.weight(1f),
                     style = MaterialTheme.typography.bodyMedium
                 )
-                TextButton(onClick = onRefresh) {
-                    Text(stringResource(R.string.retry))
-                }
+                TextButton(onClick = onRefresh) { Text(stringResource(R.string.retry)) }
             }
         } else {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 12.dp, vertical = 9.dp),
+                    .horizontalScroll(rememberScrollState())
+                    .padding(horizontal = 10.dp, vertical = 8.dp),
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 daily.forEach { day ->
-                    ForecastDay(day = day, modifier = Modifier.weight(1f))
+                    ForecastDay(day = day, modifier = Modifier.widthIn(min = 100.dp, max = 130.dp))
                 }
             }
         }
@@ -514,20 +539,14 @@ private fun ForecastStrip(
 }
 
 @Composable
-private fun ForecastDay(
-    day: DailyForecast,
-    modifier: Modifier = Modifier
-) {
+private fun ForecastDay(day: DailyForecast, modifier: Modifier = Modifier) {
     val parsedDate = remember(day.date) { runCatching { LocalDate.parse(day.date) }.getOrNull() }
-    val formatter = remember { DateTimeFormatter.ofPattern("EEE", Locale.getDefault()) }
+    val formatter = remember(Locale.getDefault()) { DateTimeFormatter.ofPattern("EEE", Locale.getDefault()) }
     val dayLabel = parsedDate?.format(formatter)?.replaceFirstChar { char ->
         if (char.isLowerCase()) char.titlecase(Locale.getDefault()) else char.toString()
     } ?: day.date
 
-    Column(
-        modifier = modifier,
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
+    Column(modifier = modifier, horizontalAlignment = Alignment.CenterHorizontally) {
         Text(dayLabel, style = MaterialTheme.typography.labelLarge)
         Text(weatherEmoji(day.weatherCode), style = MaterialTheme.typography.titleLarge)
         Text(
@@ -551,9 +570,9 @@ private fun ErrorBanner(message: String) {
         shape = MaterialTheme.shapes.medium
     ) {
         Row(
-            modifier = Modifier.padding(horizontal = 14.dp, vertical = 9.dp),
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(10.dp)
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             Text("⚠️", style = MaterialTheme.typography.titleLarge)
             Text(message, style = MaterialTheme.typography.bodyMedium)
@@ -572,9 +591,7 @@ private fun PinDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = {
-            Text(stringResource(R.string.enter_pin_for, alarmActionLabel(action)))
-        },
+        title = { Text(stringResource(R.string.enter_pin_for, alarmActionLabel(action))) },
         text = {
             Column(
                 horizontalAlignment = Alignment.CenterHorizontally,
@@ -593,10 +610,7 @@ private fun PinDialog(
                             textAlign = TextAlign.Center
                         )
                     }
-                    NumericKeypad(
-                        code = code,
-                        onCodeChange = { code = it }
-                    )
+                    NumericKeypad(code = code, onCodeChange = { code = it })
                 } else {
                     OutlinedTextField(
                         value = code,
@@ -605,34 +619,24 @@ private fun PinDialog(
                         label = { Text(stringResource(R.string.pin)) },
                         singleLine = true,
                         visualTransformation = PasswordVisualTransformation(),
-                        keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
-                            keyboardType = KeyboardType.Password
-                        )
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password)
                     )
                 }
             }
         },
         confirmButton = {
-            Button(
-                onClick = { onConfirm(code) },
-                enabled = code.isNotBlank()
-            ) {
+            Button(onClick = { onConfirm(code) }, enabled = code.isNotBlank()) {
                 Text(stringResource(R.string.confirm))
             }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) {
-                Text(stringResource(R.string.cancel))
-            }
+            TextButton(onClick = onDismiss) { Text(stringResource(R.string.cancel)) }
         }
     )
 }
 
 @Composable
-private fun NumericKeypad(
-    code: String,
-    onCodeChange: (String) -> Unit
-) {
+private fun NumericKeypad(code: String, onCodeChange: (String) -> Unit) {
     val keys = listOf(
         listOf("1", "2", "3"),
         listOf("4", "5", "6"),

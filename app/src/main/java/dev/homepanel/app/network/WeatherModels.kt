@@ -17,5 +17,7 @@ data class DailyForecast(
 
 data class WeatherForecast(
     val current: CurrentWeather,
-    val daily: List<DailyForecast>
+    val daily: List<DailyForecast>,
+    val locationLabel: String,
+    val timezoneId: String
 )

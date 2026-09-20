@@ -11,10 +11,10 @@ import org.json.JSONObject
 class WeatherClient(
     private val client: OkHttpClient
 ) {
-    suspend fun fetchEkerenForecast(): WeatherForecast = withContext(Dispatchers.IO) {
+    suspend fun fetchForecast(location: DeviceLocation): WeatherForecast = withContext(Dispatchers.IO) {
         val url = API_URL.toHttpUrl().newBuilder()
-            .addQueryParameter("latitude", EKEREN_LATITUDE)
-            .addQueryParameter("longitude", EKEREN_LONGITUDE)
+            .addQueryParameter("latitude", location.latitude.toString())
+            .addQueryParameter("longitude", location.longitude.toString())
             .addQueryParameter(
                 "current",
                 "temperature_2m,apparent_temperature,weather_code,wind_speed_10m"
@@ -23,7 +23,7 @@ class WeatherClient(
                 "daily",
                 "weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max"
             )
-            .addQueryParameter("timezone", "Europe/Brussels")
+            .addQueryParameter("timezone", "auto")
             .addQueryParameter("forecast_days", "5")
             .build()
 
@@ -66,7 +66,12 @@ class WeatherClient(
                 }
             }
 
-            WeatherForecast(current = current, daily = days)
+            WeatherForecast(
+                current = current,
+                daily = days,
+                locationLabel = location.displayName,
+                timezoneId = json.optString("timezone", location.timezoneId)
+            )
         }
     }
 
@@ -82,7 +87,5 @@ class WeatherClient(
 
     companion object {
         private const val API_URL = "https://api.open-meteo.com/v1/forecast"
-        private const val EKEREN_LATITUDE = "51.2806"
-        private const val EKEREN_LONGITUDE = "4.4184"
     }
 }

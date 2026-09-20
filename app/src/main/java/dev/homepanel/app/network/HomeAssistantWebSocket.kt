@@ -2,8 +2,11 @@ package dev.homepanel.app.network
 
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicInteger
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -22,15 +25,20 @@ class HomeAssistantWebSocket(
     private val _state = MutableStateFlow(HomeAssistantConnectionState())
     val state: StateFlow<HomeAssistantConnectionState> = _state.asStateFlow()
 
+    private val _wakeEvents = MutableSharedFlow<Unit>(extraBufferCapacity = 8)
+    val wakeEvents: SharedFlow<Unit> = _wakeEvents.asSharedFlow()
+
     private var webSocket: WebSocket? = null
     private var accessToken: String = ""
     private var alarmEntityId: String = ""
+    private var wakeEntityId: String? = null
     private var getStatesRequestId: Int? = null
 
-    fun connect(baseUrl: String, token: String, entityId: String) {
+    fun connect(baseUrl: String, token: String, entityId: String, wakeEntityId: String? = null) {
         disconnect()
         accessToken = token.trim()
         alarmEntityId = entityId.trim()
+        this.wakeEntityId = wakeEntityId?.trim()?.takeIf { it.isNotBlank() }
         _state.value = HomeAssistantConnectionState(status = ConnectionStatus.CONNECTING)
 
         val request = Request.Builder()
@@ -51,16 +59,12 @@ class HomeAssistantWebSocket(
 
     fun performAction(action: AlarmAction, code: String?) {
         val socket = webSocket ?: run {
-            _state.value = _state.value.copy(
-                actionErrorMessage = "Not connected to Home Assistant"
-            )
+            _state.value = _state.value.copy(actionErrorMessage = "Not connected to Home Assistant")
             return
         }
 
         if (_state.value.status != ConnectionStatus.CONNECTED) {
-            _state.value = _state.value.copy(
-                actionErrorMessage = "Home Assistant is not authenticated"
-            )
+            _state.value = _state.value.copy(actionErrorMessage = "Home Assistant is not authenticated")
             return
         }
 
@@ -73,9 +77,7 @@ class HomeAssistantWebSocket(
         }
 
         if (alarm?.requiresCode(action) == true && code.isNullOrBlank()) {
-            _state.value = _state.value.copy(
-                actionErrorMessage = "A PIN/code is required for this action"
-            )
+            _state.value = _state.value.copy(actionErrorMessage = "A PIN/code is required for this action")
             return
         }
 
@@ -93,10 +95,7 @@ class HomeAssistantWebSocket(
             payload.put("service_data", JSONObject().put("code", code.trim()))
         }
 
-        _state.value = _state.value.copy(
-            actionErrorMessage = null,
-            pendingAction = action
-        )
+        _state.value = _state.value.copy(actionErrorMessage = null, pendingAction = action)
 
         if (!socket.send(payload.toString())) {
             actionRequestIds.remove(requestId)
@@ -110,10 +109,7 @@ class HomeAssistantWebSocket(
     private val listener = object : WebSocketListener() {
         override fun onOpen(webSocket: WebSocket, response: Response) {
             if (this@HomeAssistantWebSocket.webSocket !== webSocket) return
-            _state.value = _state.value.copy(
-                status = ConnectionStatus.CONNECTING,
-                errorMessage = null
-            )
+            _state.value = _state.value.copy(status = ConnectionStatus.CONNECTING, errorMessage = null)
         }
 
         override fun onMessage(webSocket: WebSocket, text: String) {
@@ -180,19 +176,11 @@ class HomeAssistantWebSocket(
     }
 
     private fun onAuthenticated(socket: WebSocket) {
-        _state.value = _state.value.copy(
-            status = ConnectionStatus.CONNECTED,
-            errorMessage = null
-        )
+        _state.value = _state.value.copy(status = ConnectionStatus.CONNECTED, errorMessage = null)
 
         val statesId = nextId.getAndIncrement()
         getStatesRequestId = statesId
-        socket.send(
-            JSONObject()
-                .put("id", statesId)
-                .put("type", "get_states")
-                .toString()
-        )
+        socket.send(JSONObject().put("id", statesId).put("type", "get_states").toString())
 
         socket.send(
             JSONObject()
@@ -226,9 +214,7 @@ class HomeAssistantWebSocket(
                 }
             }
             if (!found) {
-                _state.value = _state.value.copy(
-                    errorMessage = "Selected alarm entity was not found"
-                )
+                _state.value = _state.value.copy(errorMessage = "Selected alarm entity was not found")
             }
             return
         }
@@ -236,10 +222,7 @@ class HomeAssistantWebSocket(
         val action = actionRequestIds.remove(requestId)
         if (action != null) {
             if (message.optBoolean("success", false)) {
-                _state.value = _state.value.copy(
-                    actionErrorMessage = null,
-                    pendingAction = null
-                )
+                _state.value = _state.value.copy(actionErrorMessage = null, pendingAction = null)
             } else {
                 _state.value = _state.value.copy(
                     actionErrorMessage = extractError(message, "Alarm command failed"),
@@ -252,14 +235,26 @@ class HomeAssistantWebSocket(
     private fun handleEvent(message: JSONObject) {
         val event = message.optJSONObject("event") ?: return
         val data = event.optJSONObject("data") ?: return
-        if (data.optString("entity_id") != alarmEntityId) return
-
+        val entityId = data.optString("entity_id")
         val newState = data.optJSONObject("new_state") ?: return
+        val newValue = newState.optString("state")
+
+        if (entityId == wakeEntityId && isDetectionState(newValue)) {
+            _wakeEvents.tryEmit(Unit)
+        }
+
+        if (entityId != alarmEntityId) return
+
+        val parsed = parseAlarmState(newState)
         _state.value = _state.value.copy(
-            alarm = parseAlarmState(newState),
+            alarm = parsed,
             actionErrorMessage = null,
             pendingAction = null
         )
+
+        if (parsed.state in WAKE_ALARM_STATES) {
+            _wakeEvents.tryEmit(Unit)
+        }
     }
 
     private fun parseAlarmState(item: JSONObject): AlarmEntityState {
@@ -287,5 +282,14 @@ class HomeAssistantWebSocket(
             ?.optString("message")
             ?.takeIf { it.isNotBlank() }
             ?: fallback
+    }
+
+    private fun isDetectionState(state: String): Boolean {
+        return state.lowercase() in DETECTION_STATES
+    }
+
+    companion object {
+        private val DETECTION_STATES = setOf("on", "home", "detected", "occupied", "open", "true")
+        private val WAKE_ALARM_STATES = setOf("triggered", "pending", "arming", "disarming")
     }
 }

@@ -1,50 +1,45 @@
-# HomePanel
+# HomePanel v0.3.0
 
-A modern Android wall alarm panel for Home Assistant and Alarmo.
+A modern Android wall panel for Home Assistant / Alarmo.
 
-## v0.2.0
+## v0.3.0 highlights
 
-HomePanel connects directly to Home Assistant through `/api/websocket`, subscribes to the selected `alarm_control_panel` entity and controls it with Home Assistant's standard alarm actions.
+- Home Assistant WebSocket alarm control with live state updates.
+- Automatic device language (English, Spanish, Dutch and French resources included).
+- Automatic city / region / weather coordinates from Android location permission.
+- Weather follows the device location and local time zone automatically.
+- Responsive Compose UI for phones, tablets, portrait, landscape and resizable windows.
+- Configurable screen saver timeout and low-power sleep timeout.
+- Screen saver shows clock, date, weather and alarm state and moves periodically to reduce burn-in risk.
+- Wake on Home Assistant motion / occupancy / presence sensor.
+- Wake on the tablet proximity sensor when hardware supports it.
+- Alarm `triggered`, `pending`, `arming` and `disarming` events wake the panel automatically.
+- Sleep mode stays connected and uses a nearly black, very dim screen so wake-on-detection remains reliable.
 
-### Dashboard
+## First start
 
-- Large alarm state display.
-- Touch-friendly visual modes: Disarm, Home, Away, Night, Vacation and Custom bypass.
-- PIN keypad shown only when needed.
-- Prevents redundant state commands such as Disarm while already disarmed.
-- Connection status and automatic reconnect.
-- Current time/date for Europe/Brussels.
-- Current Ekeren weather and 5-day forecast via Open-Meteo.
-- Keeps the tablet screen awake while the panel is running.
+1. Allow approximate or precise location if you want automatic local weather.
+2. Enter the Home Assistant URL and a long-lived access token.
+3. Tap **Discover devices**.
+4. Select the `alarm_control_panel` entity.
+5. Optionally select a `binary_sensor` with device class motion, occupancy or presence to wake the panel.
+6. Choose the screen saver and sleep inactivity times.
+7. Save and connect.
 
-### Setup
+Existing v0.2.x settings are migrated automatically. The new wake sensor remains optional and default screen saver / sleep timers are 2 and 10 minutes.
 
-1. Install the APK.
-2. Enter your Home Assistant base URL, for example `https://homeassistant.example.com`.
-3. Enter a Home Assistant long-lived access token.
-4. Discover and select your `alarm_control_panel` entity (Alarmo is supported).
-5. Save and connect.
+## GitHub Actions APK
 
-### Security
+Push the project to `main`. The included workflow builds the debug APK. Download the artifact named:
 
-Use HTTPS/WSS whenever possible. The Home Assistant token is stored encrypted with Android Keystore/AES-GCM.
+`HomePanel-v0.3.0-debug-apk`
 
-## Android
+The APK inside the artifact is `app-debug.apk`.
 
-- minSdk 26 (Android 8.0+)
-- targetSdk 37
-- compileSdk 37.0
-- Kotlin + Jetpack Compose
-- JDK 17
+## Notes about sleep
 
-## Build
+HomePanel deliberately uses a low-power in-app sleep mode instead of fully powering the display off. This keeps the WebSocket connection and detection logic alive so the panel can wake immediately when a Home Assistant motion sensor, Alarmo event or local proximity sensor fires.
 
-GitHub Actions builds a debug APK automatically on pushes to `main`, or manually from **Actions → Build Android APK → Run workflow**.
+## Security
 
-The artifact is named:
-
-`HomePanel-v0.2.0-debug-apk`
-
-## Weather attribution
-
-Weather forecast data: Open-Meteo.
+The access token is stored encrypted with Android Keystore. Prefer HTTPS/WSS for Home Assistant.

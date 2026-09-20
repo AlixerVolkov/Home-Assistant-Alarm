@@ -9,6 +9,18 @@ data class AlarmEntitySummary(
     val codeFormat: String?
 )
 
+data class WakeSensorSummary(
+    val entityId: String,
+    val friendlyName: String,
+    val state: String,
+    val deviceClass: String?
+)
+
+data class PanelDiscoveryResult(
+    val alarms: List<AlarmEntitySummary>,
+    val wakeSensors: List<WakeSensorSummary>
+)
+
 data class AlarmEntityState(
     val entityId: String,
     val friendlyName: String,

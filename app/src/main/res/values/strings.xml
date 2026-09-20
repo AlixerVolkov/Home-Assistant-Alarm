@@ -2,10 +2,11 @@
 <resources>
     <string name="app_name">HomePanel</string>
     <string name="setup_title">Connect to Home Assistant</string>
-    <string name="setup_subtitle">Enter your Home Assistant URL and a long-lived access token, then discover alarm entities.</string>
+    <string name="setup_subtitle">Enter your Home Assistant URL and a long-lived access token, then discover alarm and motion entities.</string>
+    <string name="system_locale_hint">Language, date, time zone and weather location follow this device automatically.</string>
     <string name="ha_url">Home Assistant URL</string>
     <string name="access_token">Access token</string>
-    <string name="discover_alarms">Discover alarms</string>
+    <string name="discover_alarms">Discover devices</string>
     <string name="discovering">Discovering...</string>
     <string name="select_alarm">Select an alarm</string>
     <string name="save_connect">Save and connect</string>
@@ -45,9 +46,9 @@
     <string name="changed_by">Last changed by: %1$s</string>
     <string name="sending_action">Sending: %1$s…</string>
     <string name="enter_pin_for">Enter PIN for: %1$s</string>
-    <string name="weather_ekeren">Ekeren</string>
     <string name="weather_loading">Loading weather…</string>
     <string name="weather_unavailable">Weather unavailable</string>
+    <string name="weather_auto_location">Automatic location</string>
     <string name="weather_refresh">Refresh weather</string>
     <string name="weather_feels_wind">Feels %1$d°C · wind %2$d km/h</string>
     <string name="weather_clear">Clear</string>
@@ -57,4 +58,15 @@
     <string name="weather_snow">Snow</string>
     <string name="weather_storm">Thunderstorm</string>
     <string name="weather_source">Weather: Open-Meteo</string>
+    <string name="wake_title">Wake on detection</string>
+    <string name="wake_subtitle">Choose a Home Assistant motion, occupancy or presence sensor. The tablet proximity sensor is also used when available.</string>
+    <string name="wake_none">No Home Assistant wake sensor</string>
+    <string name="wake_entity_manual">Wake sensor entity (optional)</string>
+    <string name="display_title">Screen saver and sleep</string>
+    <string name="display_subtitle">Set inactivity times. The saver shows clock, weather and alarm state; sleep dims to a near-black screen while HomePanel stays connected.</string>
+    <string name="screensaver_minutes">Saver after (min)</string>
+    <string name="sleep_minutes">Sleep after (min)</string>
+    <string name="zero_disables">0 = disabled</string>
+    <string name="sleep_explanation">Sleep stays connected so motion or Alarmo events can wake the panel reliably. A triggered or pending alarm also wakes it automatically.</string>
+    <string name="tap_to_wake">Touch to wake</string>
 </resources>

@@ -2,10 +2,11 @@
 <resources>
     <string name="app_name">HomePanel</string>
     <string name="setup_title">Conectar con Home Assistant</string>
-    <string name="setup_subtitle">Introduce la URL de Home Assistant y un token de acceso de larga duración; después detecta las entidades de alarma.</string>
+    <string name="setup_subtitle">Introduce la URL de Home Assistant y un token de larga duración; después detecta la alarma y sensores de movimiento.</string>
+    <string name="system_locale_hint">Idioma, fecha, zona horaria y ubicación del tiempo se toman automáticamente de este dispositivo.</string>
     <string name="ha_url">URL de Home Assistant</string>
     <string name="access_token">Token de acceso</string>
-    <string name="discover_alarms">Detectar alarmas</string>
+    <string name="discover_alarms">Detectar dispositivos</string>
     <string name="discovering">Buscando...</string>
     <string name="select_alarm">Selecciona una alarma</string>
     <string name="save_connect">Guardar y conectar</string>
@@ -45,9 +46,9 @@
     <string name="changed_by">Último cambio: %1$s</string>
     <string name="sending_action">Enviando: %1$s…</string>
     <string name="enter_pin_for">Introduce el PIN para: %1$s</string>
-    <string name="weather_ekeren">Ekeren</string>
     <string name="weather_loading">Cargando tiempo…</string>
     <string name="weather_unavailable">Tiempo no disponible</string>
+    <string name="weather_auto_location">Ubicación automática</string>
     <string name="weather_refresh">Actualizar tiempo</string>
     <string name="weather_feels_wind">Sensación %1$d°C · viento %2$d km/h</string>
     <string name="weather_clear">Despejado</string>
@@ -57,4 +58,15 @@
     <string name="weather_snow">Nieve</string>
     <string name="weather_storm">Tormenta</string>
     <string name="weather_source">Tiempo: Open-Meteo</string>
+    <string name="wake_title">Despertar por detección</string>
+    <string name="wake_subtitle">Selecciona un sensor de movimiento, ocupación o presencia de Home Assistant. También se usa el sensor de proximidad de la tablet si existe.</string>
+    <string name="wake_none">Sin sensor de Home Assistant</string>
+    <string name="wake_entity_manual">Entidad del sensor para despertar (opcional)</string>
+    <string name="display_title">Salvapantallas y reposo</string>
+    <string name="display_subtitle">Define los minutos de inactividad. El salvapantallas muestra hora, tiempo y alarma; el reposo deja una pantalla casi negra manteniendo la conexión.</string>
+    <string name="screensaver_minutes">Salvapantallas tras (min)</string>
+    <string name="sleep_minutes">Reposo tras (min)</string>
+    <string name="zero_disables">0 = desactivado</string>
+    <string name="sleep_explanation">El reposo mantiene HomePanel conectado para despertar de forma fiable con movimiento o eventos de Alarmo. Una alarma activada o en cuenta atrás también despierta el panel.</string>
+    <string name="tap_to_wake">Toca para despertar</string>
 </resources>

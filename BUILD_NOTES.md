@@ -1,21 +1,21 @@
-# Build notes
+# Build notes - HomePanel 0.3.0
 
-Source validation performed in the generation environment:
+The project is configured for the GitHub Actions build chain already proven by v0.2.x:
 
-- All Android XML files parse successfully.
-- All `R.string.*` references used by Kotlin sources exist in the default resource set.
-- English and Spanish string resource keys are in sync.
-- Pure Kotlin domain models compile with the available Kotlin compiler.
-- A syntax-only pass over all Kotlin source files reported no parser errors; unresolved Android/Compose symbols are expected because this environment has no Android SDK or Gradle dependency cache.
+- JDK 17
+- Gradle 9.6.0
+- AGP 9.4.0
+- compileSdk 37 / compileSdkMinor 0
+- Android SDK package `platforms;android-37.0`
 
-A full Android `assembleDebug` was not executed because the generation environment does not contain an Android SDK or Gradle and cannot download binary build dependencies from the container network.
+Run:
 
-The project pins AGP 9.4.0 and Gradle 9.6.0 in its build files. `gradle-wrapper.properties` is included, but the generated Gradle wrapper scripts/JAR are not included because the binary wrapper could not be retrieved in this environment.
+```bash
+gradle --no-daemon --stacktrace :app:assembleDebug
+```
 
-Recommended first verification after opening in Android Studio:
+Output:
 
-1. Select JDK 17 for Gradle.
-2. Install Android SDK 37.
-3. Let Android Studio sync the project.
-4. Generate/update the Gradle wrapper if required by your local IDE.
-5. Run `:app:assembleDebug`.
+`app/build/outputs/apk/debug/app-debug.apk`
+
+The current ChatGPT container does not include a complete Android SDK/Gradle toolchain, so the authoritative full build remains the included GitHub Actions workflow.
