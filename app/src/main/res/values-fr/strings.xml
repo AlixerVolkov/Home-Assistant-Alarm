@@ -182,4 +182,9 @@
     <string name="entity_combo_loading">Chargement des entités Home Assistant…</string>
     <string name="entity_combo_count">%1$d capteurs binaires disponibles</string>
     <string name="entity_combo_discover_hint">Ouvrez cet écran après une détection ou touchez Découvrir ci-dessus pour charger les entités Home Assistant.</string>
+    <string name="alarm_bypass_title">Capteurs bloquant l’armement</string>
+    <string name="alarm_bypass_message">Impossible d’activer %1$s car ces capteurs sont actifs. Fermez-les et réessayez, ou contournez tous les capteurs qui bloquent l’armement.</string>
+    <string name="alarm_bypass_note">Les capteurs contournés sont temporairement ignorés par Alarmo jusqu’au désarmement de l’alarme.</string>
+    <string name="alarm_bypass_confirm">Contourner et armer</string>
+    <string name="alarm_bypass_retry">Réessayer</string>
 </resources>

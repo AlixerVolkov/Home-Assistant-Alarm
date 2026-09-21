@@ -241,4 +241,9 @@
     <string name="entity_combo_loading">Loading Home Assistant entities…</string>
     <string name="entity_combo_count">%1$d binary sensors available</string>
     <string name="entity_combo_discover_hint">Open this screen after a discovery, or tap Discover above, to load Home Assistant entities.</string>
+    <string name="alarm_bypass_title">Sensors blocking arming</string>
+    <string name="alarm_bypass_message">%1$s cannot be activated because these sensors are active. You can close them and retry, or bypass all currently blocking sensors and arm anyway.</string>
+    <string name="alarm_bypass_note">Bypassed sensors are temporarily ignored by Alarmo until the alarm is disarmed.</string>
+    <string name="alarm_bypass_confirm">Bypass and arm</string>
+    <string name="alarm_bypass_retry">Retry</string>
 </resources>

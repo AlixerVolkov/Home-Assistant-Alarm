@@ -554,6 +554,20 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         socketClient.performAction(action, code)
     }
 
+    fun retryFailedAlarmoArm() {
+        userActivity()
+        socketClient.retryFailedAlarmoArm(forceBypass = false)
+    }
+
+    fun forceArmBypassingOpenSensors() {
+        userActivity()
+        socketClient.retryFailedAlarmoArm(forceBypass = true)
+    }
+
+    fun dismissAlarmBypassRequest() {
+        socketClient.dismissAlarmBypassRequest()
+    }
+
     fun createGuestVoucher() {
         userActivity()
         socketClient.createGuestVoucher()

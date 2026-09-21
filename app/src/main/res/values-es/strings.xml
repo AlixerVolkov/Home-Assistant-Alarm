@@ -241,4 +241,9 @@
     <string name="entity_combo_loading">Cargando entidades de Home Assistant…</string>
     <string name="entity_combo_count">%1$d sensores binarios disponibles</string>
     <string name="entity_combo_discover_hint">Abre esta pantalla después de descubrir entidades o pulsa Descubrir arriba para cargar Home Assistant.</string>
+    <string name="alarm_bypass_title">Sensores que impiden armar</string>
+    <string name="alarm_bypass_message">No se puede activar %1$s porque estos sensores están activos. Puedes cerrarlos y reintentar, o hacer bypass de todos los sensores que bloquean el armado y armar igualmente.</string>
+    <string name="alarm_bypass_note">Los sensores omitidos quedan temporalmente ignorados por Alarmo hasta que se desarme la alarma.</string>
+    <string name="alarm_bypass_confirm">Bypass y armar</string>
+    <string name="alarm_bypass_retry">Reintentar</string>
 </resources>

@@ -1,3 +1,7 @@
+> Current release: **0.6.12** (`versionCode 23`)
+
+> Current version: **0.6.11**
+
 # HomePanel v0.6.10
 
 ## v0.6.10: selector de sensores de Home Assistant corregido

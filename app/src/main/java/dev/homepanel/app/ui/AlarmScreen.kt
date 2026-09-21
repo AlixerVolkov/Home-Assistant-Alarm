@@ -67,6 +67,7 @@ import dev.homepanel.app.WeatherUiState
 import dev.homepanel.app.data.PanelEvent
 import dev.homepanel.app.data.PanelSettings
 import dev.homepanel.app.network.AlarmAction
+import dev.homepanel.app.network.AlarmBypassRequest
 import dev.homepanel.app.network.AlarmEntityState
 import dev.homepanel.app.network.AlarmFeatures
 import dev.homepanel.app.network.ConnectionStatus
@@ -94,6 +95,9 @@ fun AlarmScreen(
     houseSummaryState: HouseSummaryUiState,
     history: List<PanelEvent>,
     onAction: (AlarmAction, String?) -> Unit,
+    onRetryAlarmoArm: () -> Unit,
+    onBypassOpenSensors: () -> Unit,
+    onDismissBypass: () -> Unit,
     onCreateGuestVoucher: () -> Unit,
     onDeleteGuestVoucher: () -> Unit,
     onRefreshGuestQr: () -> Unit,
@@ -276,6 +280,15 @@ fun AlarmScreen(
         )
     }
 
+    connectionState.bypassRequest?.let { request ->
+        AlarmBypassDialog(
+            request = request,
+            onRetry = onRetryAlarmoArm,
+            onBypass = onBypassOpenSensors,
+            onDismiss = onDismissBypass
+        )
+    }
+
     pinAction?.let { action ->
         PinDialog(
             action = action,
@@ -287,6 +300,55 @@ fun AlarmScreen(
             }
         )
     }
+}
+
+@Composable
+private fun AlarmBypassDialog(
+    request: AlarmBypassRequest,
+    onRetry: () -> Unit,
+    onBypass: () -> Unit,
+    onDismiss: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(R.string.alarm_bypass_title)) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Text(stringResource(R.string.alarm_bypass_message, alarmActionLabel(request.action)))
+                request.sensors.forEach { sensor ->
+                    Column {
+                        Text(
+                            text = "• ${sensor.friendlyName}",
+                            fontWeight = FontWeight.SemiBold
+                        )
+                        if (sensor.friendlyName != sensor.entityId) {
+                            Text(
+                                text = sensor.entityId,
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                }
+                Text(
+                    stringResource(R.string.alarm_bypass_note),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        },
+        confirmButton = {
+            Button(onClick = onBypass) {
+                Text(stringResource(R.string.alarm_bypass_confirm))
+            }
+        },
+        dismissButton = {
+            Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                TextButton(onClick = onRetry) { Text(stringResource(R.string.alarm_bypass_retry)) }
+                TextButton(onClick = onDismiss) { Text(stringResource(R.string.cancel)) }
+            }
+        }
+    )
 }
 
 @Composable

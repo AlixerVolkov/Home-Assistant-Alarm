@@ -100,3 +100,13 @@ RTSP/MQTT are lazy, a persistent Java/Kotlin crash report is installed, and the 
 - Daily forecast uses `POST /api/services/weather/get_forecasts?return_response`.
 - Open-Meteo remains selectable as a direct Internet fallback.
 - Network diagnostics tests LAN, HA, HA weather, Open-Meteo, GitHub, MQTT TCP and local RTSP listener.
+
+## v0.6.10 packaging correction
+
+- Repo ZIP now includes hidden `.github/workflows/*` files and `.gitignore`.
+- Build workflow derives artifact filenames from `versionName` instead of a hard-coded version.
+- App version remains `0.6.10` / `versionCode 21`; no APK was produced by the broken package.
+
+
+## v0.6.12
+- Alarmo failed-arm dialog with user-confirmed force bypass (`force: true`).

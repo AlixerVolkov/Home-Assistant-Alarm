@@ -46,7 +46,9 @@ data class AlarmEntityState(
     val supportedFeatures: Int,
     val codeArmRequired: Boolean,
     val codeFormat: String?,
-    val changedBy: String? = null
+    val changedBy: String? = null,
+    val isAlarmo: Boolean = false,
+    val openSensors: List<String> = emptyList()
 ) {
     fun supports(feature: Int): Boolean = supportedFeatures and feature != 0
 
@@ -77,6 +79,17 @@ data class AlarmEntityState(
     }
 }
 
+
+data class AlarmBypassSensor(
+    val entityId: String,
+    val friendlyName: String
+)
+
+data class AlarmBypassRequest(
+    val action: AlarmAction,
+    val sensors: List<AlarmBypassSensor>
+)
+
 data class GuestVoucherState(
     val entityId: String,
     val code: String,
@@ -97,14 +110,15 @@ object AlarmFeatures {
 
 enum class AlarmAction(
     val service: String,
-    val targetState: String
+    val targetState: String,
+    val alarmoMode: String?
 ) {
-    DISARM("alarm_disarm", "disarmed"),
-    ARM_HOME("alarm_arm_home", "armed_home"),
-    ARM_AWAY("alarm_arm_away", "armed_away"),
-    ARM_NIGHT("alarm_arm_night", "armed_night"),
-    ARM_VACATION("alarm_arm_vacation", "armed_vacation"),
-    ARM_CUSTOM_BYPASS("alarm_arm_custom_bypass", "armed_custom_bypass")
+    DISARM("alarm_disarm", "disarmed", null),
+    ARM_HOME("alarm_arm_home", "armed_home", "home"),
+    ARM_AWAY("alarm_arm_away", "armed_away", "away"),
+    ARM_NIGHT("alarm_arm_night", "armed_night", "night"),
+    ARM_VACATION("alarm_arm_vacation", "armed_vacation", "vacation"),
+    ARM_CUSTOM_BYPASS("alarm_arm_custom_bypass", "armed_custom_bypass", "custom")
 }
 
 enum class ConnectionStatus {
@@ -122,6 +136,7 @@ data class HomeAssistantConnectionState(
     val actionErrorMessage: String? = null,
     val guestErrorMessage: String? = null,
     val pendingAction: AlarmAction? = null,
+    val bypassRequest: AlarmBypassRequest? = null,
     val pendingGuestVoucher: Boolean = false,
     val pendingGuestVoucherDelete: Boolean = false
 )

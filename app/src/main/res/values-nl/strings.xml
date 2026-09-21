@@ -187,4 +187,9 @@
     <string name="entity_combo_loading">Home Assistant-entiteiten laden…</string>
     <string name="entity_combo_count">%1$d binaire sensoren beschikbaar</string>
     <string name="entity_combo_discover_hint">Open dit scherm na een detectie of tik hierboven op Ontdekken om Home Assistant-entiteiten te laden.</string>
+    <string name="alarm_bypass_title">Sensoren blokkeren inschakelen</string>
+    <string name="alarm_bypass_message">%1$s kan niet worden ingeschakeld omdat deze sensoren actief zijn. Sluit ze en probeer opnieuw, of omzeil alle sensoren die het inschakelen blokkeren.</string>
+    <string name="alarm_bypass_note">Omzeilde sensoren worden tijdelijk door Alarmo genegeerd totdat het alarm wordt uitgeschakeld.</string>
+    <string name="alarm_bypass_confirm">Omzeilen en inschakelen</string>
+    <string name="alarm_bypass_retry">Opnieuw proberen</string>
 </resources>

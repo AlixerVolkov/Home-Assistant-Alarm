@@ -21,6 +21,7 @@ class HomeAssistantWebSocket(
 ) {
     private val nextId = AtomicInteger(1)
     private val actionRequestIds = ConcurrentHashMap<Int, AlarmAction>()
+    private val entityFriendlyNames = ConcurrentHashMap<String, String>()
     private val guestVoucherRequestIds = ConcurrentHashMap.newKeySet<Int>()
     private val guestVoucherDeleteRequestIds = ConcurrentHashMap.newKeySet<Int>()
 
@@ -41,6 +42,8 @@ class HomeAssistantWebSocket(
     private var guestCreateButtonEntityId: String? = null
     private var guestDeleteButtonEntityId: String? = null
     private var getStatesRequestId: Int? = null
+    private var lastAlarmoArmAction: AlarmAction? = null
+    private var lastAlarmoArmCode: String? = null
 
     fun connect(
         baseUrl: String,
@@ -73,42 +76,80 @@ class HomeAssistantWebSocket(
         current?.close(1000, "Client disconnect")
         getStatesRequestId = null
         actionRequestIds.clear()
+        entityFriendlyNames.clear()
+        lastAlarmoArmAction = null
+        lastAlarmoArmCode = null
         guestVoucherRequestIds.clear()
         guestVoucherDeleteRequestIds.clear()
         _state.value = HomeAssistantConnectionState(status = ConnectionStatus.DISCONNECTED)
     }
 
     fun performAction(action: AlarmAction, code: String?) {
+        performActionInternal(action, code, forceBypass = false)
+    }
+
+    fun retryFailedAlarmoArm(forceBypass: Boolean) {
+        val action = lastAlarmoArmAction ?: return
+        performActionInternal(action, lastAlarmoArmCode, forceBypass = forceBypass)
+    }
+
+    fun dismissAlarmBypassRequest() {
+        _state.value = _state.value.copy(bypassRequest = null)
+    }
+
+    private fun performActionInternal(action: AlarmAction, code: String?, forceBypass: Boolean) {
         val socket = authenticatedSocket() ?: return
 
         val alarm = _state.value.alarm
         if (alarm != null && !alarm.canPerform(action)) {
             _state.value = _state.value.copy(
-                actionErrorMessage = "This action is not available from the current alarm state"
+                actionErrorMessage = "This action is not available from the current alarm state",
+                bypassRequest = null
             )
             return
         }
 
         if (alarm?.requiresCode(action) == true && code.isNullOrBlank()) {
-            _state.value = _state.value.copy(actionErrorMessage = "A PIN/code is required for this action")
+            _state.value = _state.value.copy(
+                actionErrorMessage = "A PIN/code is required for this action",
+                bypassRequest = null
+            )
             return
         }
 
         val requestId = nextId.getAndIncrement()
         actionRequestIds[requestId] = action
 
-        val payload = JSONObject()
-            .put("id", requestId)
-            .put("type", "call_service")
-            .put("domain", "alarm_control_panel")
-            .put("service", action.service)
-            .put("target", JSONObject().put("entity_id", alarmEntityId))
-
-        if (!code.isNullOrBlank()) {
-            payload.put("service_data", JSONObject().put("code", code.trim()))
+        val isAlarmoArm = alarm?.isAlarmo == true && action != AlarmAction.DISARM
+        if (isAlarmoArm) {
+            lastAlarmoArmAction = action
+            lastAlarmoArmCode = code
+        } else if (action == AlarmAction.DISARM) {
+            lastAlarmoArmAction = null
+            lastAlarmoArmCode = null
         }
 
-        _state.value = _state.value.copy(actionErrorMessage = null, pendingAction = action)
+        val payload = if (isAlarmoArm) {
+            buildAlarmoActionPayload(requestId, action, code, forceBypass)
+        } else {
+            JSONObject()
+                .put("id", requestId)
+                .put("type", "call_service")
+                .put("domain", "alarm_control_panel")
+                .put("service", action.service)
+                .put("target", JSONObject().put("entity_id", alarmEntityId))
+                .apply {
+                    if (!code.isNullOrBlank()) {
+                        put("service_data", JSONObject().put("code", code.trim()))
+                    }
+                }
+        }
+
+        _state.value = _state.value.copy(
+            actionErrorMessage = null,
+            pendingAction = action,
+            bypassRequest = null
+        )
 
         if (!socket.send(payload.toString())) {
             actionRequestIds.remove(requestId)
@@ -294,6 +335,16 @@ class HomeAssistantWebSocket(
                 .put("event_type", "state_changed")
                 .toString()
         )
+
+        // Alarmo reports validation failures as events rather than WebSocket call_service errors.
+        // Subscribing is harmless on systems where Alarmo is not installed.
+        socket.send(
+            JSONObject()
+                .put("id", nextId.getAndIncrement())
+                .put("type", "subscribe_events")
+                .put("event_type", "alarmo_failed_to_arm")
+                .toString()
+        )
     }
 
     private fun handleResult(message: JSONObject) {
@@ -313,7 +364,14 @@ class HomeAssistantWebSocket(
             var guestState: GuestVoucherState? = null
             for (index in 0 until result.length()) {
                 val item = result.optJSONObject(index) ?: continue
-                when (item.optString("entity_id")) {
+                val itemEntityId = item.optString("entity_id")
+                val itemFriendlyName = item.optJSONObject("attributes")
+                    ?.optString("friendly_name")
+                    ?.takeIf { it.isNotBlank() }
+                if (itemEntityId.isNotBlank() && !itemFriendlyName.isNullOrBlank()) {
+                    entityFriendlyNames[itemEntityId] = itemFriendlyName
+                }
+                when (itemEntityId) {
                     alarmEntityId -> {
                         alarmFound = true
                         _state.value = _state.value.copy(alarm = parseAlarmState(item))
@@ -373,14 +431,26 @@ class HomeAssistantWebSocket(
 
     private fun handleEvent(message: JSONObject) {
         val event = message.optJSONObject("event") ?: return
+        val eventType = event.optString("event_type")
         val data = event.optJSONObject("data") ?: return
+
+        if (eventType == "alarmo_failed_to_arm") {
+            handleAlarmoFailedToArm(data)
+            return
+        }
+
+        if (eventType != "state_changed") return
+
         val entityId = data.optString("entity_id")
         val newState = data.optJSONObject("new_state") ?: return
+        val oldState = data.optJSONObject("old_state")
         val newValue = newState.optString("state")
+        val oldValue = oldState?.optString("state")
         val attributes = newState.optJSONObject("attributes")
         val friendlyName = attributes?.optString("friendly_name")
             ?.takeIf { it.isNotBlank() }
             ?: entityId.substringAfter('.').replace('_', ' ')
+        if (entityId.isNotBlank()) entityFriendlyNames[entityId] = friendlyName
         val deviceClass = attributes?.optString("device_class")
             ?.takeIf { it.isNotBlank() && it != "null" }
         if (shouldPublishEntityEvent(entityId, deviceClass)) {
@@ -403,15 +473,119 @@ class HomeAssistantWebSocket(
         if (entityId != alarmEntityId) return
 
         val parsed = parseAlarmState(newState)
-        _state.value = _state.value.copy(
+        val current = _state.value
+        val actualStateChange = oldValue != null && oldValue != newValue
+        val failedWithOpenSensors =
+            parsed.isAlarmo &&
+                parsed.openSensors.isNotEmpty() &&
+                !actualStateChange &&
+                current.pendingAction != null
+
+        if (actualStateChange) {
+            lastAlarmoArmAction = null
+            lastAlarmoArmCode = null
+        }
+
+        _state.value = current.copy(
             alarm = parsed,
-            actionErrorMessage = null,
-            pendingAction = null
+            actionErrorMessage = when {
+                failedWithOpenSensors -> "Alarmo could not arm. Open sensors: ${parsed.openSensors.joinToString(", ")}"
+                actualStateChange -> null
+                else -> current.actionErrorMessage
+            },
+            pendingAction = when {
+                failedWithOpenSensors -> null
+                actualStateChange -> null
+                else -> current.pendingAction
+            }
         )
 
         if (parsed.state in WAKE_ALARM_STATES) {
             _wakeEvents.tryEmit(Unit)
         }
+    }
+
+    private fun handleAlarmoFailedToArm(data: JSONObject) {
+        val eventEntityId = data.optString("entity_id")
+        if (eventEntityId.isNotBlank() && eventEntityId != alarmEntityId) return
+
+        val reason = data.optString("reason")
+        val sensors = data.optJSONArray("sensors")
+            ?.let { array ->
+                buildList {
+                    for (i in 0 until array.length()) {
+                        array.optString(i).takeIf { it.isNotBlank() }?.let(::add)
+                    }
+                }
+            }
+            .orEmpty()
+
+        val failedAction = lastAlarmoArmAction ?: alarmActionFromAlarmoCommand(data.optString("command"))
+        val bypassSensors = sensors.map { entityId ->
+            AlarmBypassSensor(
+                entityId = entityId,
+                friendlyName = entityFriendlyNames[entityId]
+                    ?: entityId.substringAfter('.').replace('_', ' ')
+            )
+        }
+
+        val message = when (reason) {
+            "open_sensors" -> if (sensors.isNotEmpty()) {
+                "Alarmo could not arm. Open sensors: ${sensors.joinToString(", ")}"
+            } else {
+                "Alarmo could not arm because one or more sensors are open"
+            }
+            "invalid_code" -> "Alarmo rejected the code"
+            "not_allowed" -> "Alarmo does not allow this arming operation from the current state"
+            else -> "Alarmo could not arm${reason.takeIf { it.isNotBlank() }?.let { ": $it" }.orEmpty()}"
+        }
+
+        _state.value = _state.value.copy(
+            actionErrorMessage = message,
+            pendingAction = null,
+            bypassRequest = if (reason == "open_sensors" && failedAction != null && bypassSensors.isNotEmpty()) {
+                AlarmBypassRequest(failedAction, bypassSensors)
+            } else {
+                null
+            }
+        )
+    }
+
+    private fun alarmActionFromAlarmoCommand(command: String): AlarmAction? = when (command) {
+        "arm_home" -> AlarmAction.ARM_HOME
+        "arm_away" -> AlarmAction.ARM_AWAY
+        "arm_night" -> AlarmAction.ARM_NIGHT
+        "arm_vacation" -> AlarmAction.ARM_VACATION
+        "arm_custom_bypass", "arm_custom" -> AlarmAction.ARM_CUSTOM_BYPASS
+        else -> null
+    }
+
+    private fun buildAlarmoActionPayload(
+        requestId: Int,
+        action: AlarmAction,
+        code: String?,
+        forceBypass: Boolean
+    ): JSONObject {
+        val serviceData = JSONObject()
+            .put("entity_id", alarmEntityId)
+            .put("context_id", "homepanel-$requestId")
+
+        serviceData.put("mode", action.alarmoMode ?: error("Missing Alarmo arm mode"))
+        val service = "arm"
+
+        if (!code.isNullOrBlank()) {
+            serviceData.put("code", code.trim())
+        }
+        if (forceBypass) {
+            serviceData.put("force", true)
+        }
+
+        return JSONObject()
+            .put("id", requestId)
+            .put("type", "call_service")
+            .put("domain", "alarmo")
+            .put("service", service)
+            .put("service_data", serviceData)
     }
 
     private fun parseAlarmState(item: JSONObject): AlarmEntityState {
@@ -420,6 +594,22 @@ class HomeAssistantWebSocket(
         val friendlyName = attributes?.optString("friendly_name")
             ?.takeIf { it.isNotBlank() }
             ?: entityId.substringAfter('.').replace('_', ' ')
+
+        val openSensors = attributes?.optJSONObject("open_sensors")
+            ?.let { obj ->
+                buildList {
+                    val keys = obj.keys()
+                    while (keys.hasNext()) add(keys.next())
+                }
+            }
+            .orEmpty()
+
+        val isAlarmo =
+            entityId.substringAfter('.').contains("alarmo", ignoreCase = true) ||
+                attributes?.has("arm_mode") == true ||
+                attributes?.has("next_state") == true ||
+                attributes?.has("bypassed_sensors") == true ||
+                attributes?.has("last_triggered") == true
 
         return AlarmEntityState(
             entityId = entityId,
@@ -430,7 +620,9 @@ class HomeAssistantWebSocket(
             codeFormat = attributes?.optString("code_format")
                 ?.takeIf { it.isNotBlank() && it != "null" },
             changedBy = attributes?.optString("changed_by")
-                ?.takeIf { it.isNotBlank() && it != "null" }
+                ?.takeIf { it.isNotBlank() && it != "null" },
+            isAlarmo = isAlarmo,
+            openSensors = openSensors
         )
     }
 
