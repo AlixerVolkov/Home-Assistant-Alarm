@@ -52,22 +52,52 @@ jobs:
           KEYSTORE_PATH="$RUNNER_TEMP/homepanel-release.jks"
           printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 --decode > "$KEYSTORE_PATH"
           echo "ANDROID_KEYSTORE_PATH=$KEYSTORE_PATH" >> "$GITHUB_ENV"
+          test -s "$KEYSTORE_PATH"
 
       - name: Build signed release APK
         shell: bash
         run: gradle --no-daemon --stacktrace :app:assembleRelease
 
-      - name: Publish GitHub Release
+      - name: Prepare release files
         shell: bash
         run: |
           VERSION=$(sed -n 's/.*versionName = "\([^"]*\)".*/\1/p' app/build.gradle.kts | head -1)
+          if [ -z "$VERSION" ]; then
+            echo "::error::Unable to read versionName from app/build.gradle.kts"
+            exit 1
+          fi
           TAG="v$VERSION"
           APK="dist/HomePanel-v$VERSION.apk"
+          SHA="$APK.sha256"
           mkdir -p dist
           cp app/build/outputs/apk/release/app-release.apk "$APK"
-          "$ANDROID_HOME/build-tools/36.0.0/apksigner" verify --verbose "$APK"
+          "$ANDROID_HOME/build-tools/36.0.0/apksigner" verify --verbose --print-certs "$APK"
+          sha256sum "$APK" > "$SHA"
+          echo "VERSION=$VERSION" >> "$GITHUB_ENV"
+          echo "TAG=$TAG" >> "$GITHUB_ENV"
+          echo "APK=$APK" >> "$GITHUB_ENV"
+          echo "SHA=$SHA" >> "$GITHUB_ENV"
+          ls -lh "$APK" "$SHA"
+
+      - name: Upload APK as Actions artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: HomePanel-v${{ env.VERSION }}-signed-apk
+          path: |
+            ${{ env.APK }}
+            ${{ env.SHA }}
+          if-no-files-found: error
+
+      - name: Publish GitHub Release asset
+        shell: bash
+        run: |
           if gh release view "$TAG" >/dev/null 2>&1; then
-            gh release upload "$TAG" "$APK" --clobber
+            gh release upload "$TAG" "$APK" "$SHA" --clobber
           else
-            gh release create "$TAG" "$APK" --title "HomePanel $VERSION" --generate-notes
+            gh release create "$TAG" "$APK" "$SHA" \
+              --title "HomePanel $VERSION" \
+              --generate-notes \
+              --latest
           fi
+          echo "Release asset published: $TAG / $(basename "$APK")"
+          gh release view "$TAG" --json url,tagName,isDraft,isPrerelease,assets
