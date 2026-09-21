@@ -24,7 +24,7 @@
 - Si una persona está en una zona pero HA no expone GPS, HomePanel usa el centro de esa zona para representarla.
 - Forecast de 5 días rediseñado con condición, máximas/mínimas, probabilidad y cantidad de precipitación, viento, humedad/presión/UV cuando el proveedor los ofrece.
 
-
+##
 Panel Android moderno para Home Assistant / Alarmo, pensado para tablets de pared.
 
 ## v0.6.6: Weather de Home Assistant + diagnóstico de red
