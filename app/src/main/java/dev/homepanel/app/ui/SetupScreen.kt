@@ -3,8 +3,13 @@ package dev.homepanel.app.ui
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
+import android.hardware.Sensor
+import android.hardware.SensorEvent
+import android.hardware.SensorEventListener
+import android.hardware.SensorManager
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -19,6 +24,8 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -27,9 +34,11 @@ import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -279,30 +288,12 @@ fun SetupScreen(
 
                 if (discoveryState.alarms.isNotEmpty()) {
                     Text(stringResource(R.string.select_alarm), style = MaterialTheme.typography.titleMedium)
-                }
-
-                discoveryState.alarms.forEach { alarm ->
-                    Card(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable { entityId = alarm.entityId }
-                    ) {
-                        Row(
-                            modifier = Modifier.padding(14.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(12.dp)
-                        ) {
-                            RadioButton(
-                                selected = entityId == alarm.entityId,
-                                onClick = { entityId = alarm.entityId }
-                            )
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text(alarm.friendlyName, style = MaterialTheme.typography.titleMedium)
-                                Text(alarm.entityId, style = MaterialTheme.typography.bodySmall)
-                                Text(alarm.state, style = MaterialTheme.typography.bodySmall)
-                            }
-                        }
-                    }
+                    EntityCombo(
+                        selectedId = entityId,
+                        choices = discoveryState.alarms.map { it.entityId to "${it.friendlyName} · ${it.state}" },
+                        emptyLabel = stringResource(R.string.entity_combo_choose),
+                        onSelect = { entityId = it }
+                    )
                 }
 
                 OutlinedTextField(
@@ -349,27 +340,15 @@ fun SetupScreen(
                 }
 
                 if (weatherSource == MainViewModel.WEATHER_SOURCE_HOME_ASSISTANT) {
-                    discoveryState.weatherEntities.forEach { entity ->
-                        Card(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable { weatherEntityId = entity.entityId }
-                        ) {
-                            Row(
-                                modifier = Modifier.padding(12.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(10.dp)
-                            ) {
-                                RadioButton(
-                                    selected = weatherEntityId == entity.entityId,
-                                    onClick = { weatherEntityId = entity.entityId }
-                                )
-                                Column(modifier = Modifier.weight(1f)) {
-                                    Text(entity.friendlyName, style = MaterialTheme.typography.titleSmall)
-                                    Text("${entity.entityId} · ${entity.condition}", style = MaterialTheme.typography.bodySmall)
-                                }
-                            }
-                        }
+                    if (discoveryState.weatherEntities.isNotEmpty()) {
+                        EntityCombo(
+                            selectedId = weatherEntityId,
+                            choices = discoveryState.weatherEntities.map {
+                                it.entityId to "${it.friendlyName} · ${it.condition}"
+                            },
+                            emptyLabel = stringResource(R.string.entity_combo_choose),
+                            onSelect = { weatherEntityId = it }
+                        )
                     }
                     OutlinedTextField(
                         value = weatherEntityId,
@@ -511,46 +490,21 @@ fun SetupScreen(
                     checked = proximityWakeEnabled,
                     onCheckedChange = { proximityWakeEnabled = it }
                 )
+                ProximitySensorStatus(enabled = proximityWakeEnabled)
 
-                Card(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable { wakeEntityId = "" }
-                ) {
-                    Row(
-                        modifier = Modifier.padding(12.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        RadioButton(
-                            selected = wakeEntityId.isBlank(),
-                            onClick = { wakeEntityId = "" }
-                        )
-                        Text(stringResource(R.string.wake_none))
-                    }
-                }
-
-                discoveryState.wakeSensors.forEach { sensor ->
-                    Card(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable { wakeEntityId = sensor.entityId }
-                    ) {
-                        Row(
-                            modifier = Modifier.padding(12.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(10.dp)
-                        ) {
-                            RadioButton(
-                                selected = wakeEntityId == sensor.entityId,
-                                onClick = { wakeEntityId = sensor.entityId }
-                            )
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text(sensor.friendlyName, style = MaterialTheme.typography.titleSmall)
-                                Text(sensor.entityId, style = MaterialTheme.typography.bodySmall)
-                            }
+                EntityCombo(
+                    selectedId = wakeEntityId,
+                    choices = discoveryState.wakeSensors.map {
+                        it.entityId to buildString {
+                            append(it.friendlyName)
+                            it.deviceClass?.let { deviceClass -> append(" · ").append(deviceClass) }
+                            append(" · ").append(it.state)
                         }
-                    }
-                }
+                    },
+                    emptyLabel = stringResource(R.string.wake_none),
+                    noneLabel = stringResource(R.string.wake_none),
+                    onSelect = { wakeEntityId = it }
+                )
 
                 OutlinedTextField(
                     value = wakeEntityId,
@@ -979,6 +933,165 @@ private fun diagnosticLabel(key: String): String = when (key) {
     "mqtt" -> stringResource(R.string.network_diagnostics_mqtt)
     "rtsp" -> stringResource(R.string.network_diagnostics_rtsp)
     else -> key
+}
+
+@Composable
+private fun EntityCombo(
+    selectedId: String,
+    choices: List<Pair<String, String>>,
+    emptyLabel: String,
+    noneLabel: String? = null,
+    onSelect: (String) -> Unit
+) {
+    var expanded by remember { mutableStateOf(false) }
+    val selected = choices.firstOrNull { it.first == selectedId }
+    val title = when {
+        selected != null -> selected.second
+        selectedId.isNotBlank() -> selectedId
+        noneLabel != null -> noneLabel
+        else -> emptyLabel
+    }
+
+    Box(modifier = Modifier.fillMaxWidth()) {
+        OutlinedButton(
+            onClick = { expanded = true },
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Column(
+                modifier = Modifier.weight(1f),
+                horizontalAlignment = Alignment.Start
+            ) {
+                Text(title, style = MaterialTheme.typography.bodyMedium)
+                if (selected != null) {
+                    Text(
+                        selected.first,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+            Text("▼")
+        }
+
+        DropdownMenu(
+            expanded = expanded,
+            onDismissRequest = { expanded = false },
+            modifier = Modifier.widthIn(min = 280.dp, max = 560.dp)
+        ) {
+            if (noneLabel != null) {
+                DropdownMenuItem(
+                    text = { Text(noneLabel) },
+                    onClick = {
+                        onSelect("")
+                        expanded = false
+                    }
+                )
+            }
+            choices.forEach { (entityId, label) ->
+                DropdownMenuItem(
+                    text = {
+                        Column {
+                            Text(label, style = MaterialTheme.typography.bodyMedium)
+                            Text(
+                                entityId,
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    },
+                    onClick = {
+                        onSelect(entityId)
+                        expanded = false
+                    }
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun ProximitySensorStatus(enabled: Boolean) {
+    val context = LocalContext.current
+    val sensorManager = remember(context) {
+        context.getSystemService(Context.SENSOR_SERVICE) as SensorManager
+    }
+    val sensor = remember(sensorManager) {
+        sensorManager.getDefaultSensor(Sensor.TYPE_PROXIMITY, true)
+            ?: sensorManager.getDefaultSensor(Sensor.TYPE_PROXIMITY, false)
+            ?: sensorManager.getDefaultSensor(Sensor.TYPE_PROXIMITY)
+    }
+    var registered by remember(sensor, enabled) { mutableStateOf(false) }
+    var lastDistance by remember(sensor, enabled) { mutableStateOf<Float?>(null) }
+    var near by remember(sensor, enabled) { mutableStateOf<Boolean?>(null) }
+
+    DisposableEffect(sensor, enabled) {
+        if (!enabled || sensor == null) {
+            registered = false
+            return@DisposableEffect onDispose { }
+        }
+        val listener = object : SensorEventListener {
+            override fun onSensorChanged(event: SensorEvent) {
+                val distance = event.values.firstOrNull() ?: return
+                val maxRange = event.sensor.maximumRange.takeIf { it > 0f } ?: 5f
+                lastDistance = distance
+                near = distance >= 0f && distance < maxRange
+            }
+
+            override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) = Unit
+        }
+        registered = runCatching {
+            sensorManager.registerListener(listener, sensor, SensorManager.SENSOR_DELAY_UI)
+        }.getOrDefault(false)
+        onDispose {
+            runCatching { sensorManager.unregisterListener(listener) }
+            registered = false
+        }
+    }
+
+    Card(modifier = Modifier.fillMaxWidth()) {
+        Column(
+            modifier = Modifier.padding(12.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+            Text(stringResource(R.string.proximity_sensor_status_title), style = MaterialTheme.typography.titleSmall)
+            if (sensor == null) {
+                Text(
+                    stringResource(R.string.proximity_sensor_missing),
+                    color = MaterialTheme.colorScheme.error,
+                    style = MaterialTheme.typography.bodySmall
+                )
+            } else {
+                Text(
+                    "${sensor.name} · ${sensor.vendor}",
+                    style = MaterialTheme.typography.bodySmall
+                )
+                Text(
+                    stringResource(
+                        R.string.proximity_sensor_details,
+                        sensor.maximumRange,
+                        if (sensor.isWakeUpSensor) stringResource(R.string.yes) else stringResource(R.string.no)
+                    ),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                val stateText = when {
+                    !enabled -> stringResource(R.string.proximity_sensor_disabled)
+                    !registered -> stringResource(R.string.proximity_sensor_registration_failed)
+                    near == true -> stringResource(R.string.proximity_sensor_near)
+                    near == false -> stringResource(R.string.proximity_sensor_far)
+                    else -> stringResource(R.string.proximity_sensor_waiting)
+                }
+                Text(stateText, style = MaterialTheme.typography.bodySmall)
+                lastDistance?.let {
+                    Text(
+                        stringResource(R.string.proximity_sensor_distance, it),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+        }
+    }
 }
 
 @Composable

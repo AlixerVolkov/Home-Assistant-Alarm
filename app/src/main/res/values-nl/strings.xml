@@ -155,19 +155,33 @@
     <string name="weather_warning_more">+%1$d extra waarschuwing(en)</string>
     <string name="people_map">Kaart</string>
     <string name="people_map_title">Locaties van personen</string>
-    <string name="people_map_offline_hint">Offline overzicht op basis van person.*- en zone.*-coördinaten uit Home Assistant. Geen externe kaartdienst nodig.</string>
+    <string name="people_map_offline_hint">Offline kaart met tegels die eerder in OpenStreetMap zijn bekeken. In Offline-modus worden geen netwerkverzoeken gedaan.</string>
     <string name="people_map_no_coordinates">Home Assistant geeft momenteel geen coördinaten voor deze personen door. Hun zone/status staat hieronder.</string>
     <string name="forecast_title">5-daagse verwachting</string>
     <string name="today">Vandaag</string>
 
     <string name="people_map_osm">OpenStreetMap</string>
-    <string name="people_map_offline">Offline</string>
-    <string name="people_map_osm_hint">Echte kaartachtergrond van OpenStreetMap. Vereist HTTPS-toegang tot tile.openstreetmap.org:443. Schakel naar Offline als de kaarttegels niet laden.</string>
+    <string name="people_map_offline">Offline cache</string>
+    <string name="people_map_osm_hint">Interactieve OpenStreetMap: sleep om te verplaatsen en knijp of gebruik +/− om te zoomen. Bekeken tegels worden opgeslagen voor Offline. Vereist tile.openstreetmap.org:443.</string>
     <string name="people_map_osm_unavailable">OpenStreetMap niet beschikbaar\nSta tile.openstreetmap.org:443 toe of gebruik de Offline-kaart.</string>
     <string name="weather_warning_expires">Tot: %1$s</string>
     <string name="weather_warning_context_title">Weeralarm</string>
     <string name="weather_warning_context_subtitle">%1$d actieve waarschuwing(en)</string>
     <string name="weather_warning_context_hint">HomePanel heeft het scherm gewekt omdat Home Assistant een actieve weerwaarschuwing meldt. Deze weergave sluiten wist de waarschuwing niet.</string>
     <string name="network_diagnostics_osm">OpenStreetMap-kaarttegels</string>
+
+    <string name="entity_combo_choose">Kies een entiteit</string>
+    <string name="yes">Ja</string>
+    <string name="no">Nee</string>
+    <string name="proximity_sensor_status_title">Diagnose van de nabijheidssensor</string>
+    <string name="proximity_sensor_missing">Dit Android-apparaat stelt geen TYPE_PROXIMITY-sensor beschikbaar.</string>
+    <string name="proximity_sensor_details">Max. bereik: %1$.1f cm · wake-up sensor: %2$s</string>
+    <string name="proximity_sensor_disabled">De test is uitgeschakeld omdat wakker worden via nabijheid uit staat.</string>
+    <string name="proximity_sensor_registration_failed">Android weigerde de nabijheidssensor te registreren.</string>
+    <string name="proximity_sensor_near">Live test: DICHTBIJ</string>
+    <string name="proximity_sensor_far">Live test: VER</string>
+    <string name="proximity_sensor_waiting">Live test: wachten op de eerste sensorwaarde…</string>
+    <string name="proximity_sensor_distance">Ruwe afstand: %1$.2f cm</string>
+    <string name="people_map_offline_cache_empty">Geen kaarttegels in de cache voor dit gebied. Open hetzelfde gebied één keer online in OpenStreetMap; bekeken tegels worden bewaard voor Offline.</string>
 
 </resources>

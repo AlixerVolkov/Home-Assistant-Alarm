@@ -150,19 +150,33 @@
     <string name="weather_warning_more">+%1$d alerte(s) supplémentaire(s)</string>
     <string name="people_map">Carte</string>
     <string name="people_map_title">Position des personnes</string>
-    <string name="people_map_offline_hint">Vue hors ligne créée à partir des coordonnées person.* et zone.* de Home Assistant. Aucun service cartographique externe requis.</string>
+    <string name="people_map_offline_hint">Carte hors ligne utilisant les tuiles déjà consultées en mode OpenStreetMap. Aucun accès réseau n’est effectué lorsque ce mode est sélectionné.</string>
     <string name="people_map_no_coordinates">Home Assistant ne fournit actuellement aucune coordonnée pour ces personnes. Leur zone/état reste affiché ci-dessous.</string>
     <string name="forecast_title">Prévisions sur 5 jours</string>
     <string name="today">Aujourd’hui</string>
 
     <string name="people_map_osm">OpenStreetMap</string>
-    <string name="people_map_offline">Hors ligne</string>
-    <string name="people_map_osm_hint">Fond de carte réel OpenStreetMap. Nécessite un accès HTTPS à tile.openstreetmap.org:443. Si les tuiles ne chargent pas, passez en mode hors ligne.</string>
+    <string name="people_map_offline">Cache hors ligne</string>
+    <string name="people_map_osm_hint">OpenStreetMap interactif : faites glisser pour déplacer la carte et pincez ou utilisez +/− pour zoomer. Les tuiles vues sont mises en cache. Nécessite tile.openstreetmap.org:443.</string>
     <string name="people_map_osm_unavailable">OpenStreetMap indisponible\nAutorisez tile.openstreetmap.org:443 ou utilisez la carte hors ligne.</string>
     <string name="weather_warning_expires">Jusqu’au : %1$s</string>
     <string name="weather_warning_context_title">Alerte météo</string>
     <string name="weather_warning_context_subtitle">%1$d alerte(s) active(s)</string>
     <string name="weather_warning_context_hint">HomePanel a réveillé écran car Home Assistant signale une alerte météo active. Fermer cette vue ne supprime pas alerte.</string>
     <string name="network_diagnostics_osm">Tuiles OpenStreetMap</string>
+
+    <string name="entity_combo_choose">Choisir une entité</string>
+    <string name="yes">Oui</string>
+    <string name="no">Non</string>
+    <string name="proximity_sensor_status_title">Diagnostic du capteur de proximité</string>
+    <string name="proximity_sensor_missing">Cet appareil Android n’expose aucun capteur TYPE_PROXIMITY.</string>
+    <string name="proximity_sensor_details">Portée max. : %1$.1f cm · capteur wake-up : %2$s</string>
+    <string name="proximity_sensor_disabled">Le test est désactivé car le réveil par proximité est coupé.</string>
+    <string name="proximity_sensor_registration_failed">Android a refusé l’enregistrement du capteur de proximité.</string>
+    <string name="proximity_sensor_near">Test en direct : PROCHE</string>
+    <string name="proximity_sensor_far">Test en direct : LOIN</string>
+    <string name="proximity_sensor_waiting">Test en direct : attente du premier événement du capteur…</string>
+    <string name="proximity_sensor_distance">Distance brute : %1$.2f cm</string>
+    <string name="people_map_offline_cache_empty">Aucune tuile de carte en cache pour cette zone. Ouvrez une fois la même zone en mode OpenStreetMap en ligne ; les tuiles vues seront conservées pour le mode hors ligne.</string>
 
 </resources>

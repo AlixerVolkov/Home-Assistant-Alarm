@@ -209,19 +209,33 @@
     <string name="weather_warning_more">+%1$d more warning(s)</string>
     <string name="people_map">Map</string>
     <string name="people_map_title">People locations</string>
-    <string name="people_map_offline_hint">Offline overview built from Home Assistant person.* and zone.* coordinates. No external map service is required.</string>
+    <string name="people_map_offline_hint">Offline map from tiles already viewed in OpenStreetMap mode. No network requests are made while Offline is selected.</string>
     <string name="people_map_no_coordinates">Home Assistant is not currently exposing coordinates for these people. Their zone/state is still shown below.</string>
     <string name="forecast_title">5-day forecast</string>
     <string name="today">Today</string>
 
     <string name="people_map_osm">OpenStreetMap</string>
-    <string name="people_map_offline">Offline</string>
-    <string name="people_map_osm_hint">Real OpenStreetMap background. Requires HTTPS access to tile.openstreetmap.org:443. If tiles cannot load, switch to Offline.</string>
+    <string name="people_map_offline">Offline cache</string>
+    <string name="people_map_osm_hint">Interactive OpenStreetMap: drag to move, pinch or use +/− to zoom. Viewed tiles are cached for Offline mode. Requires tile.openstreetmap.org:443.</string>
     <string name="people_map_osm_unavailable">OpenStreetMap unavailable\nAllow tile.openstreetmap.org:443 or use Offline map.</string>
     <string name="weather_warning_expires">Until: %1$s</string>
     <string name="weather_warning_context_title">Weather alert</string>
     <string name="weather_warning_context_subtitle">%1$d active warning(s)</string>
     <string name="weather_warning_context_hint">HomePanel woke the display because Home Assistant reports an active weather warning. Closing this view does not clear the warning.</string>
     <string name="network_diagnostics_osm">OpenStreetMap tiles</string>
+
+    <string name="entity_combo_choose">Choose an entity</string>
+    <string name="yes">Yes</string>
+    <string name="no">No</string>
+    <string name="proximity_sensor_status_title">Tablet proximity sensor diagnostics</string>
+    <string name="proximity_sensor_missing">No TYPE_PROXIMITY sensor is exposed by this Android device.</string>
+    <string name="proximity_sensor_details">Max range: %1$.1f cm · wake-up sensor: %2$s</string>
+    <string name="proximity_sensor_disabled">Sensor test disabled because proximity wake is off.</string>
+    <string name="proximity_sensor_registration_failed">Android refused to register the proximity listener.</string>
+    <string name="proximity_sensor_near">Live test: NEAR</string>
+    <string name="proximity_sensor_far">Live test: FAR</string>
+    <string name="proximity_sensor_waiting">Live test: waiting for the first sensor event…</string>
+    <string name="proximity_sensor_distance">Raw distance: %1$.2f cm</string>
+    <string name="people_map_offline_cache_empty">No cached map tiles for this area. Open the same area once in OpenStreetMap mode while online; viewed tiles are stored for Offline mode.</string>
 
 </resources>

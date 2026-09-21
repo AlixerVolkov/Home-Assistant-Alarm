@@ -209,19 +209,33 @@
     <string name="weather_warning_more">+%1$d aviso(s) más</string>
     <string name="people_map">Mapa</string>
     <string name="people_map_title">Ubicación de personas</string>
-    <string name="people_map_offline_hint">Vista offline creada con las coordenadas person.* y zone.* de Home Assistant. No necesita ningún servicio de mapas externo.</string>
+    <string name="people_map_offline_hint">Mapa offline con los mapas que ya hayas visto en OpenStreetMap. Mientras está seleccionado Offline no se realizan conexiones de red.</string>
     <string name="people_map_no_coordinates">Home Assistant no está exponiendo coordenadas para estas personas en este momento. Su zona/estado sigue apareciendo debajo.</string>
     <string name="forecast_title">Previsión de 5 días</string>
     <string name="today">Hoy</string>
 
     <string name="people_map_osm">OpenStreetMap</string>
-    <string name="people_map_offline">Offline</string>
-    <string name="people_map_osm_hint">Fondo de mapa real de OpenStreetMap. Requiere acceso HTTPS a tile.openstreetmap.org:443. Si no cargan los mapas, cambia a Offline.</string>
+    <string name="people_map_offline">Cache offline</string>
+    <string name="people_map_osm_hint">OpenStreetMap interactivo: arrastra para moverte y pellizca o usa +/− para hacer zoom. Los mapas vistos se guardan para Offline. Requiere tile.openstreetmap.org:443.</string>
     <string name="people_map_osm_unavailable">OpenStreetMap no disponible\nPermite tile.openstreetmap.org:443 o usa el mapa Offline.</string>
     <string name="weather_warning_expires">Hasta: %1$s</string>
     <string name="weather_warning_context_title">Alerta meteorológica</string>
     <string name="weather_warning_context_subtitle">%1$d aviso(s) activo(s)</string>
     <string name="weather_warning_context_hint">HomePanel ha despertado la pantalla porque Home Assistant informa de un aviso meteorológico activo. Cerrar esta vista no elimina el aviso.</string>
     <string name="network_diagnostics_osm">Mapas OpenStreetMap</string>
+
+    <string name="entity_combo_choose">Selecciona una entidad</string>
+    <string name="yes">Sí</string>
+    <string name="no">No</string>
+    <string name="proximity_sensor_status_title">Diagnóstico del sensor de proximidad</string>
+    <string name="proximity_sensor_missing">Este dispositivo Android no expone ningún sensor TYPE_PROXIMITY.</string>
+    <string name="proximity_sensor_details">Rango máximo: %1$.1f cm · sensor wake-up: %2$s</string>
+    <string name="proximity_sensor_disabled">La prueba está desactivada porque el despertar por proximidad está apagado.</string>
+    <string name="proximity_sensor_registration_failed">Android rechazó el registro del sensor de proximidad.</string>
+    <string name="proximity_sensor_near">Prueba en vivo: CERCA</string>
+    <string name="proximity_sensor_far">Prueba en vivo: LEJOS</string>
+    <string name="proximity_sensor_waiting">Prueba en vivo: esperando el primer evento del sensor…</string>
+    <string name="proximity_sensor_distance">Distancia sin procesar: %1$.2f cm</string>
+    <string name="people_map_offline_cache_empty">No hay mapas guardados para esta zona. Abre una vez la misma zona en OpenStreetMap con conexión; los mapas vistos se guardan para el modo Offline.</string>
 
 </resources>

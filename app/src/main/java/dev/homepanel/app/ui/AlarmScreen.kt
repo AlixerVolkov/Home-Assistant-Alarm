@@ -5,7 +5,6 @@ import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
 import android.graphics.BitmapFactory
-import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -49,7 +48,6 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
-import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.Color
@@ -85,9 +83,6 @@ import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 import kotlinx.coroutines.delay
-import kotlin.math.cos
-import kotlin.math.max
-import kotlin.math.min
 import kotlin.math.roundToInt
 
 @Composable
@@ -621,11 +616,14 @@ private fun PersonsMapDialog(
                             )
                         }
                     } else {
-                        OfflinePeopleMap(
-                            persons = located,
-                            zones = relevantZones,
-                            modifier = Modifier.fillMaxWidth().weight(1f)
-                        )
+                        Card(modifier = Modifier.fillMaxWidth().weight(1f)) {
+                            OsmPeopleMap(
+                                persons = located,
+                                zones = relevantZones,
+                                modifier = Modifier.fillMaxSize(),
+                                allowNetwork = false
+                            )
+                        }
                     }
                 }
 
@@ -641,80 +639,6 @@ private fun PersonsMapDialog(
                         )
                     }
                 }
-            }
-        }
-    }
-}
-
-@Composable
-private fun OfflinePeopleMap(
-    persons: List<PersonLocation>,
-    zones: List<HomeZoneLocation>,
-    modifier: Modifier = Modifier
-) {
-    val surface = MaterialTheme.colorScheme.surfaceVariant
-    val grid = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.16f)
-    val zoneColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.28f)
-    val zoneBorder = MaterialTheme.colorScheme.primary.copy(alpha = 0.72f)
-    val personColor = MaterialTheme.colorScheme.tertiary
-    val personOutline = MaterialTheme.colorScheme.surface
-
-    val coordinates = buildList<Pair<Double, Double>> {
-        persons.forEach { person ->
-            val lat = person.latitude
-            val lon = person.longitude
-            if (lat != null && lon != null) add(lat to lon)
-        }
-        zones.forEach { add(it.latitude to it.longitude) }
-    }
-    val rawMinLat = coordinates.minOf { it.first }
-    val rawMaxLat = coordinates.maxOf { it.first }
-    val rawMinLon = coordinates.minOf { it.second }
-    val rawMaxLon = coordinates.maxOf { it.second }
-    val latSpanBase = max(rawMaxLat - rawMinLat, 0.01)
-    val lonSpanBase = max(rawMaxLon - rawMinLon, 0.01)
-    val minLat = (rawMinLat + rawMaxLat) / 2.0 - latSpanBase * 0.62
-    val maxLat = (rawMinLat + rawMaxLat) / 2.0 + latSpanBase * 0.62
-    val minLon = (rawMinLon + rawMaxLon) / 2.0 - lonSpanBase * 0.62
-    val maxLon = (rawMinLon + rawMaxLon) / 2.0 + lonSpanBase * 0.62
-    val latSpan = maxLat - minLat
-    val lonSpan = maxLon - minLon
-
-    Card(modifier = modifier) {
-        Canvas(modifier = Modifier.fillMaxSize().padding(8.dp)) {
-            drawRect(surface)
-            for (i in 1..4) {
-                val x = size.width * i / 5f
-                val y = size.height * i / 5f
-                drawLine(grid, Offset(x, 0f), Offset(x, size.height), strokeWidth = 1f)
-                drawLine(grid, Offset(0f, y), Offset(size.width, y), strokeWidth = 1f)
-            }
-
-            fun point(lat: Double, lon: Double): Offset {
-                val x = ((lon - minLon) / lonSpan).toFloat().coerceIn(0f, 1f) * size.width
-                val y = (1.0 - (lat - minLat) / latSpan).toFloat().coerceIn(0f, 1f) * size.height
-                return Offset(x, y)
-            }
-
-            zones.forEach { zone ->
-                val center = point(zone.latitude, zone.longitude)
-                val latMeters = latSpan * 111_320.0
-                val radiusPx = ((zone.radiusMeters / latMeters) * size.height).toFloat().coerceIn(8f, min(size.width, size.height) * 0.22f)
-                drawCircle(zoneColor, radius = radiusPx, center = center)
-                drawCircle(zoneBorder, radius = radiusPx, center = center, style = androidx.compose.ui.graphics.drawscope.Stroke(width = 2f))
-            }
-
-            persons.forEachIndexed { index, person ->
-                val lat = person.latitude ?: return@forEachIndexed
-                val lon = person.longitude ?: return@forEachIndexed
-                val base = point(lat, lon)
-                val angle = (index % 6) * Math.PI / 3.0
-                val offset = if (persons.count { it.latitude == lat && it.longitude == lon } > 1) {
-                    Offset((cos(angle) * 10.0).toFloat(), (kotlin.math.sin(angle) * 10.0).toFloat())
-                } else Offset.Zero
-                val center = base + offset
-                drawCircle(personOutline, radius = 12f, center = center)
-                drawCircle(personColor, radius = 8f, center = center)
             }
         }
     }

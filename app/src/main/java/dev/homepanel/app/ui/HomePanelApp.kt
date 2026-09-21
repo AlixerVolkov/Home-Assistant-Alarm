@@ -39,6 +39,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -260,33 +261,35 @@ fun HomePanelApp(viewModel: MainViewModel) {
         }, ContextCompat.getMainExecutor(context))
     }
 
-    // Proximity: publish state and wake on FAR -> NEAR while sleeping/saver.
-    DisposableEffect(context, settings?.proximityWakeEnabled, displayMode) {
-        val shouldListen = !safeMode && settings?.proximityWakeEnabled == true
+    // Proximity: prefer the wake-up variant so supported devices can deliver events while the
+    // panel is dimmed/asleep. Keep the listener alive across display-mode changes; re-registering
+    // the sensor on every ACTIVE/SCREENSAVER/SLEEP transition caused vendor-specific misses.
+    val currentDisplayMode by rememberUpdatedState(displayMode)
+    DisposableEffect(context, settings?.proximityWakeEnabled) {
+        val shouldListen = settings?.proximityWakeEnabled == true
         if (!shouldListen) return@DisposableEffect onDispose { }
 
         val sensorManager = context.getSystemService(Context.SENSOR_SERVICE) as SensorManager
-        val proximity = sensorManager.getDefaultSensor(Sensor.TYPE_PROXIMITY)
-        var wasNear = false
+        val proximity = preferredProximitySensor(sensorManager)
         var lastWakeElapsed = 0L
         val listener = object : SensorEventListener {
             override fun onSensorChanged(event: SensorEvent) {
                 val distance = event.values.firstOrNull() ?: return
-                val isNear = distance < event.sensor.maximumRange
+                val maxRange = event.sensor.maximumRange.takeIf { it > 0f } ?: 5f
+                val isNear = distance >= 0f && distance < maxRange
                 val now = SystemClock.elapsedRealtime()
                 viewModel.onProximityChanged(isNear)
-                if (displayMode != PanelDisplayMode.ACTIVE && isNear && !wasNear &&
+                if (currentDisplayMode != PanelDisplayMode.ACTIVE && isNear &&
                     now - lastWakeElapsed >= PROXIMITY_DEBOUNCE_MS
                 ) {
                     lastWakeElapsed = now
                     viewModel.onLocalDetection()
                 }
-                wasNear = isNear
             }
             override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) = Unit
         }
         if (proximity != null) runCatching {
-            sensorManager.registerListener(listener, proximity, SensorManager.SENSOR_DELAY_NORMAL)
+            sensorManager.registerListener(listener, proximity, SensorManager.SENSOR_DELAY_UI)
         }
         onDispose { runCatching { sensorManager.unregisterListener(listener) } }
     }
@@ -619,5 +622,11 @@ private fun Activity.wakeHardwareScreen() {
     )
     wakeLock.acquire(3_000L)
 }
+
+
+private fun preferredProximitySensor(sensorManager: SensorManager): Sensor? =
+    sensorManager.getDefaultSensor(Sensor.TYPE_PROXIMITY, true)
+        ?: sensorManager.getDefaultSensor(Sensor.TYPE_PROXIMITY, false)
+        ?: sensorManager.getDefaultSensor(Sensor.TYPE_PROXIMITY)
 
 private const val PROXIMITY_DEBOUNCE_MS = 900L

@@ -1,10 +1,11 @@
 package dev.homepanel.app.ui
 
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.MaterialTheme
@@ -23,6 +24,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
@@ -39,7 +41,6 @@ import kotlin.math.PI
 import kotlin.math.cos
 import kotlin.math.floor
 import kotlin.math.ln
-import kotlin.math.max
 import kotlin.math.pow
 import kotlin.math.sin
 
@@ -47,6 +48,8 @@ private const val TILE_SIZE = 256.0
 private const val MIN_ZOOM = 2
 private const val MAX_ZOOM = 18
 private const val EARTH_RADIUS_METERS = 6_378_137.0
+private const val PINCH_ZOOM_IN_THRESHOLD = 1.18f
+private const val PINCH_ZOOM_OUT_THRESHOLD = 0.84f
 
 private data class GeoPoint(val latitude: Double, val longitude: Double)
 
@@ -70,17 +73,26 @@ private data class RenderTile(
     val id: String = "$zoom/$serverX/$y"
 }
 
+/**
+ * Interactive people map.
+ *
+ * Online mode downloads visible OpenStreetMap tiles and stores them persistently.
+ * Offline mode performs no network calls and renders the same map from previously cached tiles.
+ */
 @Composable
 fun OsmPeopleMap(
     persons: List<PersonLocation>,
     zones: List<HomeZoneLocation>,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    allowNetwork: Boolean = true
 ) {
     val context = LocalContext.current
     val tileClient = remember { OsmTileClient(context.applicationContext) }
     val tiles = remember { mutableStateMapOf<String, ImageBitmap>() }
     var containerSize by remember { mutableStateOf(IntSize.Zero) }
     var zoomAdjustment by remember { mutableIntStateOf(0) }
+    var panOffset by remember { mutableStateOf(Offset.Zero) }
+    var pinchAccumulator by remember { mutableStateOf(1f) }
     var failedTiles by remember { mutableIntStateOf(0) }
 
     val coordinates = remember(persons, zones) {
@@ -94,13 +106,13 @@ fun OsmPeopleMap(
         }
     }
 
-    val viewport = remember(coordinates, containerSize, zoomAdjustment) {
+    val viewport = remember(coordinates, containerSize, zoomAdjustment, panOffset) {
         if (coordinates.isEmpty() || containerSize.width <= 0 || containerSize.height <= 0) null
-        else calculateViewport(coordinates, containerSize, zoomAdjustment)
+        else calculateViewport(coordinates, containerSize, zoomAdjustment, panOffset)
     }
     val visibleTiles = remember(viewport) { viewport?.let(::visibleTiles).orEmpty() }
 
-    LaunchedEffect(visibleTiles) {
+    LaunchedEffect(visibleTiles, allowNetwork) {
         failedTiles = 0
         val missing = visibleTiles.filterNot { tiles.containsKey(it.id) }
         missing.chunked(6).forEach { batch ->
@@ -108,7 +120,7 @@ fun OsmPeopleMap(
                 batch.map { tile ->
                     async {
                         val bitmap = runCatching {
-                            tileClient.loadTile(tile.zoom, tile.serverX, tile.y)
+                            tileClient.loadTile(tile.zoom, tile.serverX, tile.y, allowNetwork = allowNetwork)
                         }.getOrNull()
                         tile to bitmap
                     }
@@ -120,6 +132,19 @@ fun OsmPeopleMap(
         }
     }
 
+    fun changeZoom(delta: Int) {
+        val currentZoom = viewport?.zoom ?: return
+        if (delta > 0 && currentZoom >= MAX_ZOOM) return
+        if (delta < 0 && currentZoom <= MIN_ZOOM) return
+        zoomAdjustment += delta
+        panOffset = if (delta > 0) {
+            Offset(panOffset.x * 2f, panOffset.y * 2f)
+        } else {
+            Offset(panOffset.x / 2f, panOffset.y / 2f)
+        }
+        pinchAccumulator = 1f
+    }
+
     val surface = MaterialTheme.colorScheme.surfaceVariant
     val grid = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.14f)
     val zoneFill = MaterialTheme.colorScheme.primary.copy(alpha = 0.20f)
@@ -127,7 +152,20 @@ fun OsmPeopleMap(
     val personFill = MaterialTheme.colorScheme.tertiary
     val personStroke = MaterialTheme.colorScheme.surface
 
-    Box(modifier = modifier.onSizeChanged { containerSize = it }) {
+    Box(
+        modifier = modifier
+            .onSizeChanged { containerSize = it }
+            .pointerInput(coordinates, allowNetwork) {
+                detectTransformGestures { _, pan, zoom, _ ->
+                    panOffset = panOffset + pan
+                    pinchAccumulator *= zoom
+                    when {
+                        pinchAccumulator >= PINCH_ZOOM_IN_THRESHOLD -> changeZoom(+1)
+                        pinchAccumulator <= PINCH_ZOOM_OUT_THRESHOLD -> changeZoom(-1)
+                    }
+                }
+            }
+    ) {
         Canvas(Modifier.fillMaxSize()) {
             drawRect(surface)
             for (i in 1..4) {
@@ -187,13 +225,21 @@ fun OsmPeopleMap(
             modifier = Modifier.align(Alignment.TopEnd).padding(8.dp)
         ) {
             FilledTonalButton(
-                onClick = { zoomAdjustment = (zoomAdjustment + 1).coerceAtMost(5) },
+                onClick = { changeZoom(+1) },
                 modifier = Modifier.size(48.dp)
             ) { Text("+") }
             FilledTonalButton(
-                onClick = { zoomAdjustment = (zoomAdjustment - 1).coerceAtLeast(-5) },
+                onClick = { changeZoom(-1) },
                 modifier = Modifier.size(48.dp)
             ) { Text("−") }
+            FilledTonalButton(
+                onClick = {
+                    zoomAdjustment = 0
+                    panOffset = Offset.Zero
+                    pinchAccumulator = 1f
+                },
+                modifier = Modifier.size(48.dp)
+            ) { Text("⌂") }
         }
 
         if (failedTiles > 0 && visibleTiles.none { tiles.containsKey(it.id) }) {
@@ -203,7 +249,10 @@ fun OsmPeopleMap(
                 shape = MaterialTheme.shapes.medium
             ) {
                 Text(
-                    stringResource(R.string.people_map_osm_unavailable),
+                    stringResource(
+                        if (allowNetwork) R.string.people_map_osm_unavailable
+                        else R.string.people_map_offline_cache_empty
+                    ),
                     modifier = Modifier.padding(12.dp)
                 )
             }
@@ -223,7 +272,12 @@ fun OsmPeopleMap(
     }
 }
 
-private fun calculateViewport(points: List<GeoPoint>, size: IntSize, zoomAdjustment: Int): MapViewport {
+private fun calculateViewport(
+    points: List<GeoPoint>,
+    size: IntSize,
+    zoomAdjustment: Int,
+    panOffset: Offset
+): MapViewport {
     val autoZoom = if (points.size <= 1) 14 else {
         (MAX_ZOOM downTo MIN_ZOOM).firstOrNull { zoom ->
             val pixels = points.map { worldPixel(it.latitude, it.longitude, zoom) }
@@ -240,8 +294,8 @@ private fun calculateViewport(points: List<GeoPoint>, size: IntSize, zoomAdjustm
         zoom = zoom,
         centerWorldX = centerX,
         centerWorldY = centerY,
-        leftWorld = centerX - size.width / 2.0,
-        topWorld = centerY - size.height / 2.0,
+        leftWorld = centerX - size.width / 2.0 - panOffset.x,
+        topWorld = centerY - size.height / 2.0 - panOffset.y,
         widthPx = size.width,
         heightPx = size.height
     )

@@ -1,6 +1,6 @@
-# HomePanel 0.6.8 build notes
+# HomePanel 0.6.9 build notes
 
-- `versionCode = 19`, `versionName = 0.6.8`.
+- `versionCode = 19`, `versionName = 0.6.9`.
 - Mapa de personas con fondo OpenStreetMap opcional y mapa offline como alternativa.
 - Cache HTTP local de tiles OSM, User-Agent identificable y atribucion visible.
 - Diagnostico de red incluye `tile.openstreetmap.org:443`.

@@ -87,7 +87,7 @@ When MQTT, CameraX and kiosk services are added, split into modules:
 :feature:camera
 ```
 
-## v0.6.8 maps and weather alerts
+## v0.6.9 maps and weather alerts
 
 ### People map
 

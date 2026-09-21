@@ -1,6 +1,6 @@
-# HomePanel v0.6.8
+# HomePanel v0.6.9
 
-## v0.6.8: mapa OpenStreetMap + modo contextual de avisos
+## v0.6.9: mapa OpenStreetMap + modo contextual de avisos
 
 - El mapa de personas tiene ahora fondo real opcional de OpenStreetMap, con zoom, zonas de Home Assistant y fallback manual al mapa offline.
 - Los tiles se solicitan solo para la vista actual, con cache HTTP y atribucion visible de OpenStreetMap.
@@ -124,7 +124,7 @@ Version actual:
 
 ```text
 versionCode = 19
-versionName = 0.6.8
+versionName = 0.6.9
 ```
 
 ## Kiosk

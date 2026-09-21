@@ -1,6 +1,6 @@
 # HomePanel roadmap
 
-## Implementado hasta v0.6.8
+## Implementado hasta v0.6.9
 
 - Home Assistant WebSocket + Alarmo.
 - PIN y estados de alarma con acciones protegidas contra transiciones redundantes.
