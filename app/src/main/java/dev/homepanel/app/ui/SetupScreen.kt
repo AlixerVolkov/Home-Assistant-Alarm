@@ -124,6 +124,8 @@ fun SetupScreen(
     var rtspAdvertisedHost by rememberSaveable(initialSettings?.rtspAdvertisedHost) {
         mutableStateOf(initialSettings?.rtspAdvertisedHost.orEmpty())
     }
+    var autoDiscoveryRequested by rememberSaveable { mutableStateOf(false) }
+
     var guestVoucherSensor by rememberSaveable(initialSettings?.guestVoucherSensorEntityId) {
         mutableStateOf(initialSettings?.guestVoucherSensorEntityId.orEmpty())
     }
@@ -153,6 +155,19 @@ fun SetupScreen(
     }
     var mqttTls by rememberSaveable(initialSettings?.mqttTls) {
         mutableStateOf(initialSettings?.mqttTls ?: false)
+    }
+
+    LaunchedEffect(initialSettings?.baseUrl, initialSettings?.accessToken, discoveryState.hasRun) {
+        val savedUrl = initialSettings?.baseUrl.orEmpty()
+        val savedToken = initialSettings?.accessToken.orEmpty()
+        if (!autoDiscoveryRequested &&
+            !discoveryState.hasRun &&
+            savedUrl.isNotBlank() &&
+            savedToken.isNotBlank()
+        ) {
+            autoDiscoveryRequested = true
+            onDiscover(savedUrl, savedToken)
+        }
     }
 
     LaunchedEffect(discoveryState.guestWifi) {
@@ -505,6 +520,23 @@ fun SetupScreen(
                     noneLabel = stringResource(R.string.wake_none),
                     onSelect = { wakeEntityId = it }
                 )
+                when {
+                    discoveryState.isLoading -> Text(
+                        stringResource(R.string.entity_combo_loading),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    discoveryState.hasRun -> Text(
+                        stringResource(R.string.entity_combo_count, discoveryState.wakeSensors.size),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    else -> Text(
+                        stringResource(R.string.entity_combo_discover_hint),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
 
                 OutlinedTextField(
                     value = wakeEntityId,

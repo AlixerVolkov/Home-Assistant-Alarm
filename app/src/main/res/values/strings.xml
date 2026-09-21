@@ -59,7 +59,7 @@
     <string name="weather_storm">Thunderstorm</string>
     <string name="weather_source">Weather: Open-Meteo</string>
     <string name="wake_title">Wake on detection</string>
-    <string name="wake_subtitle">Choose a Home Assistant motion, occupancy or presence sensor. The tablet proximity sensor is also used when available.</string>
+    <string name="wake_subtitle">Choose any Home Assistant binary sensor. Motion, occupancy and presence sensors are listed first. The tablet proximity sensor is also used when available.</string>
     <string name="wake_none">No Home Assistant wake sensor</string>
     <string name="wake_entity_manual">Wake sensor entity (optional)</string>
     <string name="display_title">Screen saver and sleep</string>
@@ -238,4 +238,7 @@
     <string name="proximity_sensor_distance">Raw distance: %1$.2f cm</string>
     <string name="people_map_offline_cache_empty">No cached map tiles for this area. Open the same area once in OpenStreetMap mode while online; viewed tiles are stored for Offline mode.</string>
 
+    <string name="entity_combo_loading">Loading Home Assistant entities…</string>
+    <string name="entity_combo_count">%1$d binary sensors available</string>
+    <string name="entity_combo_discover_hint">Open this screen after a discovery, or tap Discover above, to load Home Assistant entities.</string>
 </resources>

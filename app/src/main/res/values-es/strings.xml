@@ -59,7 +59,7 @@
     <string name="weather_storm">Tormenta</string>
     <string name="weather_source">Tiempo: Open-Meteo</string>
     <string name="wake_title">Despertar por detección</string>
-    <string name="wake_subtitle">Selecciona un sensor de movimiento, ocupación o presencia de Home Assistant. También se usa el sensor de proximidad de la tablet si existe.</string>
+    <string name="wake_subtitle">Selecciona cualquier sensor binario de Home Assistant. Los de movimiento, ocupación y presencia aparecen primero. También se usa el sensor de proximidad de la tablet si existe.</string>
     <string name="wake_none">Sin sensor de Home Assistant</string>
     <string name="wake_entity_manual">Entidad del sensor para despertar (opcional)</string>
     <string name="display_title">Salvapantallas y reposo</string>
@@ -238,4 +238,7 @@
     <string name="proximity_sensor_distance">Distancia sin procesar: %1$.2f cm</string>
     <string name="people_map_offline_cache_empty">No hay mapas guardados para esta zona. Abre una vez la misma zona en OpenStreetMap con conexión; los mapas vistos se guardan para el modo Offline.</string>
 
+    <string name="entity_combo_loading">Cargando entidades de Home Assistant…</string>
+    <string name="entity_combo_count">%1$d sensores binarios disponibles</string>
+    <string name="entity_combo_discover_hint">Abre esta pantalla después de descubrir entidades o pulsa Descubrir arriba para cargar Home Assistant.</string>
 </resources>

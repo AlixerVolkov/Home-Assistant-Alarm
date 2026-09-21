@@ -67,14 +67,15 @@ class HomeAssistantRestClient(
                 if (entityId.startsWith("binary_sensor.")) {
                     val deviceClass = attributes?.optString("device_class")
                         ?.takeIf { it.isNotBlank() && it != "null" }
-                    if (deviceClass in WAKE_DEVICE_CLASSES) {
-                        wakeSensors += WakeSensorSummary(
-                            entityId = entityId,
-                            friendlyName = friendlyName,
-                            state = item.optString("state", "unknown"),
-                            deviceClass = deviceClass
-                        )
-                    }
+                    // Expose every binary_sensor in the selector. Previous versions only kept
+                    // motion/occupancy/presence device classes, which made the combo appear empty
+                    // for integrations that omit device_class or use another class.
+                    wakeSensors += WakeSensorSummary(
+                        entityId = entityId,
+                        friendlyName = friendlyName,
+                        state = item.optString("state", "unknown"),
+                        deviceClass = deviceClass
+                    )
                 }
             }
 
@@ -106,7 +107,13 @@ class HomeAssistantRestClient(
 
             PanelDiscoveryResult(
                 alarms = alarms.sortedBy { it.friendlyName.lowercase() },
-                wakeSensors = wakeSensors.sortedBy { it.friendlyName.lowercase() },
+                wakeSensors = wakeSensors.sortedWith(
+                    compareBy<WakeSensorSummary>(
+                        { if (it.deviceClass in WAKE_DEVICE_CLASSES) 0 else 1 },
+                        { it.friendlyName.lowercase() },
+                        { it.entityId }
+                    )
+                ),
                 guestWifi = guestWifi,
                 weatherEntities = weatherEntities.sortedBy { it.friendlyName.lowercase() }
             )

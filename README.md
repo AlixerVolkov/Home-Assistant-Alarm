@@ -1,4 +1,12 @@
-# HomePanel v0.6.9
+# HomePanel v0.6.10
+
+## v0.6.10: selector de sensores de Home Assistant corregido
+
+- El selector de despertar carga **todos** los `binary_sensor.*`, no solo motion/occupancy/presence.
+- Motion, occupancy y presence aparecen primero.
+- Al abrir Configuración con credenciales ya guardadas se lanza automáticamente el descubrimiento de entidades.
+- Se muestra cuántos sensores binarios se han cargado para que una lista vacía sea diagnosticable.
+
 
 ## v0.6.9: mapa OpenStreetMap + modo contextual de avisos
 
@@ -123,8 +131,8 @@ versionCode creciente
 Version actual:
 
 ```text
-versionCode = 19
-versionName = 0.6.9
+versionCode = 21
+versionName = 0.6.10
 ```
 
 ## Kiosk
