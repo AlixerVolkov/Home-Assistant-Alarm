@@ -144,4 +144,14 @@
     <string name="network_diagnostics_rtsp">Listener RTSP local</string>
     <string name="network_diagnostics_weather_ha">Météo Home Assistant</string>
     <string name="network_diagnostics_open_meteo">Open-Meteo / Internet</string>
+
+    <string name="weather_warnings_title">Alertes météo</string>
+    <string name="weather_warning_severity">Sévérité : %1$s</string>
+    <string name="weather_warning_more">+%1$d alerte(s) supplémentaire(s)</string>
+    <string name="people_map">Carte</string>
+    <string name="people_map_title">Position des personnes</string>
+    <string name="people_map_offline_hint">Vue hors ligne créée à partir des coordonnées person.* et zone.* de Home Assistant. Aucun service cartographique externe requis.</string>
+    <string name="people_map_no_coordinates">Home Assistant ne fournit actuellement aucune coordonnée pour ces personnes. Leur zone/état reste affiché ci-dessous.</string>
+    <string name="forecast_title">Prévisions sur 5 jours</string>
+    <string name="today">Aujourd’hui</string>
 </resources>

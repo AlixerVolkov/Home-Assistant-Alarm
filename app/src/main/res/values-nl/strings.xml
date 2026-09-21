@@ -149,4 +149,14 @@
     <string name="network_diagnostics_rtsp">Lokale RTSP-listener</string>
     <string name="network_diagnostics_weather_ha">Home Assistant-weer</string>
     <string name="network_diagnostics_open_meteo">Open-Meteo / internet</string>
+
+    <string name="weather_warnings_title">Weerwaarschuwingen</string>
+    <string name="weather_warning_severity">Ernst: %1$s</string>
+    <string name="weather_warning_more">+%1$d extra waarschuwing(en)</string>
+    <string name="people_map">Kaart</string>
+    <string name="people_map_title">Locaties van personen</string>
+    <string name="people_map_offline_hint">Offline overzicht op basis van person.*- en zone.*-coördinaten uit Home Assistant. Geen externe kaartdienst nodig.</string>
+    <string name="people_map_no_coordinates">Home Assistant geeft momenteel geen coördinaten voor deze personen door. Hun zone/status staat hieronder.</string>
+    <string name="forecast_title">5-daagse verwachting</string>
+    <string name="today">Vandaag</string>
 </resources>

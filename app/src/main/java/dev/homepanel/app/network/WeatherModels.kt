@@ -4,7 +4,10 @@ data class CurrentWeather(
     val temperatureC: Double,
     val apparentTemperatureC: Double,
     val weatherCode: Int,
-    val windSpeedKmh: Double
+    val windSpeedKmh: Double,
+    val humidityPercent: Int? = null,
+    val pressureHpa: Double? = null,
+    val uvIndex: Double? = null
 )
 
 data class DailyForecast(
@@ -12,7 +15,9 @@ data class DailyForecast(
     val weatherCode: Int,
     val minimumC: Double,
     val maximumC: Double,
-    val precipitationProbability: Int
+    val precipitationProbability: Int,
+    val precipitationMm: Double? = null,
+    val windSpeedKmh: Double? = null
 )
 
 data class WeatherForecast(

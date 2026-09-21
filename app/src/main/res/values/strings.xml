@@ -203,4 +203,14 @@
     <string name="network_diagnostics_rtsp">RTSP local listener</string>
     <string name="network_diagnostics_weather_ha">Home Assistant weather</string>
     <string name="network_diagnostics_open_meteo">Open-Meteo / Internet</string>
+
+    <string name="weather_warnings_title">Weather warnings</string>
+    <string name="weather_warning_severity">Severity: %1$s</string>
+    <string name="weather_warning_more">+%1$d more warning(s)</string>
+    <string name="people_map">Map</string>
+    <string name="people_map_title">People locations</string>
+    <string name="people_map_offline_hint">Offline overview built from Home Assistant person.* and zone.* coordinates. No external map service is required.</string>
+    <string name="people_map_no_coordinates">Home Assistant is not currently exposing coordinates for these people. Their zone/state is still shown below.</string>
+    <string name="forecast_title">5-day forecast</string>
+    <string name="today">Today</string>
 </resources>

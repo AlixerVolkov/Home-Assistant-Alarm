@@ -1,4 +1,13 @@
-# HomePanel v0.6.6
+# HomePanel v0.6.7
+
+## v0.6.7: avisos meteorológicos + mapa de personas + forecast mejorado
+
+- Detecta avisos `binary_sensor.weather_warning*` y MeteoAlarm desde Home Assistant.
+- Muestra avisos activos como banner destacado, con severidad/descripción cuando la entidad los expone.
+- Añade un mapa offline de `person.*` usando coordenadas y `zone.*`, sin depender de Google Maps/OpenStreetMap ni abrir más firewall.
+- Si una persona está en una zona pero HA no expone GPS, HomePanel usa el centro de esa zona para representarla.
+- Forecast de 5 días rediseñado con condición, máximas/mínimas, probabilidad y cantidad de precipitación, viento, humedad/presión/UV cuando el proveedor los ofrece.
+
 
 Panel Android moderno para Home Assistant / Alarmo, pensado para tablets de pared.
 

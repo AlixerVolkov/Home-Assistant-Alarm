@@ -17,11 +17,11 @@ class WeatherClient(
             .addQueryParameter("longitude", location.longitude.toString())
             .addQueryParameter(
                 "current",
-                "temperature_2m,apparent_temperature,weather_code,wind_speed_10m"
+                "temperature_2m,apparent_temperature,weather_code,wind_speed_10m,relative_humidity_2m,surface_pressure"
             )
             .addQueryParameter(
                 "daily",
-                "weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max"
+                "weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max,precipitation_sum,wind_speed_10m_max"
             )
             .addQueryParameter("timezone", "auto")
             .addQueryParameter("forecast_days", "5")
@@ -42,7 +42,9 @@ class WeatherClient(
                 temperatureC = currentJson.getDouble("temperature_2m"),
                 apparentTemperatureC = currentJson.getDouble("apparent_temperature"),
                 weatherCode = currentJson.getInt("weather_code"),
-                windSpeedKmh = currentJson.getDouble("wind_speed_10m")
+                windSpeedKmh = currentJson.getDouble("wind_speed_10m"),
+                humidityPercent = currentJson.optDouble("relative_humidity_2m").takeUnless { it.isNaN() }?.toInt(),
+                pressureHpa = currentJson.optDouble("surface_pressure").takeUnless { it.isNaN() }
             )
 
             val dates = dailyJson.getJSONArray("time")
@@ -50,6 +52,8 @@ class WeatherClient(
             val maximums = dailyJson.getJSONArray("temperature_2m_max")
             val minimums = dailyJson.getJSONArray("temperature_2m_min")
             val rain = dailyJson.getJSONArray("precipitation_probability_max")
+            val precipitation = dailyJson.getJSONArray("precipitation_sum")
+            val wind = dailyJson.getJSONArray("wind_speed_10m_max")
 
             val days = buildList {
                 val count = minOf(5, dates.length())
@@ -60,7 +64,9 @@ class WeatherClient(
                             weatherCode = intAt(codes, index),
                             minimumC = doubleAt(minimums, index),
                             maximumC = doubleAt(maximums, index),
-                            precipitationProbability = intAt(rain, index)
+                            precipitationProbability = intAt(rain, index),
+                            precipitationMm = doubleAt(precipitation, index),
+                            windSpeedKmh = doubleAt(wind, index)
                         )
                     )
                 }

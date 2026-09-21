@@ -1,3 +1,11 @@
+# HomePanel 0.6.7 build notes
+
+- `versionCode = 18`, `versionName = 0.6.7`.
+- Weather warnings are discovered from `binary_sensor.weather_warning*` and MeteoAlarm-like entities.
+- People map is offline and uses Home Assistant `person.*` / `zone.*` coordinates only.
+- Forecast UI and weather models now include optional humidity, pressure, UV, precipitation amount and forecast wind.
+- Structural validation performed locally; final Android compilation remains GitHub Actions.
+
 # Build notes - HomePanel v0.6.0
 
 ## Toolchain de GitHub Actions

@@ -132,19 +132,64 @@ class HomeAssistantRestClient(
             var personsHome = 0
             val openNames = mutableListOf<String>()
             val temperatures = mutableListOf<Triple<String, String, Double>>()
+            val persons = mutableListOf<PersonLocation>()
+            val zones = mutableListOf<HomeZoneLocation>()
+            val warnings = mutableListOf<WeatherWarning>()
 
             for (index in 0 until states.length()) {
                 val item = states.optJSONObject(index) ?: continue
                 val entityId = item.optString("entity_id")
-                val state = item.optString("state").lowercase()
-                if (state == "unavailable" || state == "unknown") continue
+                val rawState = item.optString("state")
+                val state = rawState.lowercase()
                 val attributes = item.optJSONObject("attributes")
                 val name = friendlyName(entityId, attributes)
                 val domain = entityId.substringBefore('.', "")
                 val deviceClass = attributes?.optString("device_class")?.lowercase().orEmpty()
 
+                if (domain == "zone") {
+                    val latitude = attributes?.optDoubleOrNull("latitude")
+                    val longitude = attributes?.optDoubleOrNull("longitude")
+                    if (latitude != null && longitude != null) {
+                        zones += HomeZoneLocation(
+                            entityId = entityId,
+                            friendlyName = name,
+                            latitude = latitude,
+                            longitude = longitude,
+                            radiusMeters = attributes?.optDoubleOrNull("radius") ?: 100.0
+                        )
+                    }
+                    continue
+                }
+
+                if (domain == "person") {
+                    if (state == "home") personsHome++
+                    persons += PersonLocation(
+                        entityId = entityId,
+                        friendlyName = name,
+                        state = rawState.ifBlank { "unknown" },
+                        latitude = attributes?.optDoubleOrNull("latitude"),
+                        longitude = attributes?.optDoubleOrNull("longitude"),
+                        gpsAccuracyMeters = attributes?.optDoubleOrNull("gps_accuracy"),
+                        source = attributes?.optString("source")?.takeIf { it.isNotBlank() && it != "null" }
+                    )
+                }
+
+                if (domain == "binary_sensor" && isWeatherWarningEntity(entityId, attributes)) {
+                    val active = state !in INACTIVE_WARNING_STATES
+                    warnings += WeatherWarning(
+                        entityId = entityId,
+                        friendlyName = name,
+                        active = active,
+                        severity = firstAttribute(attributes, "severity", "awareness_level", "level"),
+                        title = firstAttribute(attributes, "headline", "event", "awareness_type", "title") ?: name,
+                        description = firstAttribute(attributes, "description", "message", "instruction"),
+                        expiresAt = firstAttribute(attributes, "expires", "end", "end_time")
+                    )
+                }
+
+                if (state == "unavailable" || state == "unknown") continue
+
                 if (domain == "light" && state == "on") lightsOn++
-                if (domain == "person" && state == "home") personsHome++
 
                 if (domain == "binary_sensor" && state in setOf("on", "open")) {
                     when (deviceClass) {
@@ -168,6 +213,19 @@ class HomeAssistantRestClient(
                 }
             }
 
+            val zoneByStateName = buildMap<String, HomeZoneLocation> {
+                zones.forEach { zone ->
+                    put(zone.friendlyName.lowercase(), zone)
+                    put(zone.entityId.removePrefix("zone.").lowercase(), zone)
+                    if (zone.entityId == "zone.home") put("home", zone)
+                }
+            }
+            val resolvedPersons = persons.map { person ->
+                if (person.latitude != null && person.longitude != null) return@map person
+                val zone = zoneByStateName[person.state.lowercase()]
+                if (zone != null) person.copy(latitude = zone.latitude, longitude = zone.longitude) else person
+            }.sortedBy { it.friendlyName.lowercase() }
+
             val preferredTemperature = temperatures.minByOrNull { (entityId, name, _) ->
                 val haystack = "$entityId $name".lowercase()
                 when {
@@ -183,7 +241,10 @@ class HomeAssistantRestClient(
                 personsHome = personsHome,
                 temperatureC = preferredTemperature?.third,
                 temperatureName = preferredTemperature?.second,
-                openEntityNames = openNames
+                openEntityNames = openNames,
+                weatherWarnings = warnings.sortedWith(compareByDescending<WeatherWarning> { it.active }.thenBy { it.friendlyName.lowercase() }),
+                persons = resolvedPersons,
+                zones = zones.sortedBy { it.friendlyName.lowercase() }
             )
         }
     }
@@ -219,6 +280,9 @@ class HomeAssistantRestClient(
             temperatureUnit
         )
         val wind = convertWindToKmh(attributes.optDoubleOrNull("wind_speed") ?: 0.0, windUnit)
+        val humidity = attributes.optDoubleOrNull("humidity")?.toInt()
+        val pressure = attributes.optDoubleOrNull("pressure")
+        val uvIndex = attributes.optDoubleOrNull("uv_index")
         val condition = stateJson.optString("state", "cloudy")
 
         val serviceUrl = HomeAssistantUrl.restUrl(baseUrl, "api/services/weather/get_forecasts")
@@ -262,7 +326,9 @@ class HomeAssistantRestClient(
                         weatherCode = conditionToWeatherCode(item.optString("condition", condition)),
                         minimumC = convertTemperatureToC(lowRaw, temperatureUnit),
                         maximumC = convertTemperatureToC(highRaw, temperatureUnit),
-                        precipitationProbability = item.optDoubleOrNull("precipitation_probability")?.toInt() ?: 0
+                        precipitationProbability = item.optDoubleOrNull("precipitation_probability")?.toInt() ?: 0,
+                        precipitationMm = item.optDoubleOrNull("precipitation"),
+                        windSpeedKmh = item.optDoubleOrNull("wind_speed")?.let { convertWindToKmh(it, windUnit) }
                     )
                 )
             }
@@ -273,7 +339,10 @@ class HomeAssistantRestClient(
                 temperatureC = currentTemperature,
                 apparentTemperatureC = apparent,
                 weatherCode = conditionToWeatherCode(condition),
-                windSpeedKmh = wind
+                windSpeedKmh = wind,
+                humidityPercent = humidity,
+                pressureHpa = pressure,
+                uvIndex = uvIndex
             ),
             daily = days,
             locationLabel = friendly,
@@ -336,6 +405,22 @@ class HomeAssistantRestClient(
         else -> 3
     }
 
+    private fun isWeatherWarningEntity(entityId: String, attributes: JSONObject?): Boolean {
+        val id = entityId.lowercase()
+        if (id.startsWith("binary_sensor.weather_warning") || id.startsWith("binary_sensor.meteoalarm")) return true
+        if ("weather_warning" in id) return true
+        return "meteoalarm" in id || attributes?.has("awareness_type") == true
+    }
+
+    private fun firstAttribute(attributes: JSONObject?, vararg names: String): String? {
+        if (attributes == null) return null
+        for (name in names) {
+            val value = attributes.opt(name)?.toString()?.trim().orEmpty()
+            if (value.isNotBlank() && value != "null" && value != "[]" && value != "{}") return value
+        }
+        return null
+    }
+
     suspend fun fetchImage(
         baseUrl: String,
         accessToken: String,
@@ -372,6 +457,7 @@ class HomeAssistantRestClient(
     companion object {
         private val JSON_MEDIA_TYPE = "application/json; charset=utf-8".toMediaType()
         private val WAKE_DEVICE_CLASSES = setOf("motion", "occupancy", "presence")
+        private val INACTIVE_WARNING_STATES = setOf("off", "false", "0", "clear", "none", "unknown", "unavailable")
         private val EXCLUDED_TEMPERATURE_HINTS = setOf(
             "battery", "cpu", "processor", "tablet", "phone", "device temperature", "gpu", "ssd"
         )

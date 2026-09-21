@@ -5,6 +5,7 @@ import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
 import android.graphics.BitmapFactory
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -35,6 +36,7 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
@@ -47,8 +49,10 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -71,6 +75,9 @@ import dev.homepanel.app.network.ConnectionStatus
 import dev.homepanel.app.network.DailyForecast
 import dev.homepanel.app.network.HomeAssistantConnectionState
 import dev.homepanel.app.network.GuestVoucherState
+import dev.homepanel.app.network.HomeZoneLocation
+import dev.homepanel.app.network.PersonLocation
+import dev.homepanel.app.network.WeatherWarning
 import java.time.Instant
 import java.time.LocalDate
 import java.time.LocalDateTime
@@ -78,6 +85,9 @@ import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 import kotlinx.coroutines.delay
+import kotlin.math.cos
+import kotlin.math.max
+import kotlin.math.min
 import kotlin.math.roundToInt
 
 @Composable
@@ -102,6 +112,7 @@ fun AlarmScreen(
     var pinAction by remember { mutableStateOf<AlarmAction?>(null) }
     var showGuestWifi by remember { mutableStateOf(false) }
     var showHistory by remember { mutableStateOf(false) }
+    var showPeopleMap by remember { mutableStateOf(false) }
 
     LaunchedEffect(showGuestWifi) {
         if (showGuestWifi) onRefreshGuestQr()
@@ -132,6 +143,7 @@ fun AlarmScreen(
                 )
                 ErrorBlock(connectionState)
                 ContextStatusBanner(alarm)
+                WeatherWarningsBanner(houseSummaryState.summary?.weatherWarnings.orEmpty())
                 if (!settings.guestVoucherSensorEntityId.isNullOrBlank()) {
                     GuestWifiEntryCard(
                         voucher = connectionState.guestVoucher,
@@ -140,7 +152,11 @@ fun AlarmScreen(
                         onClick = { showGuestWifi = true }
                     )
                 }
-                HouseSummaryCard(houseSummaryState, onRefreshHouse)
+                HouseSummaryCard(
+                    state = houseSummaryState,
+                    onRefresh = onRefreshHouse,
+                    onShowMap = { showPeopleMap = true }
+                )
                 AlarmStateCard(alarm = alarm, modifier = Modifier.fillMaxWidth())
                 AlarmActionsPanel(
                     alarm = alarm,
@@ -173,6 +189,7 @@ fun AlarmScreen(
                 )
                 ErrorBlock(connectionState)
                 ContextStatusBanner(alarm)
+                WeatherWarningsBanner(houseSummaryState.summary?.weatherWarnings.orEmpty())
                 if (!settings.guestVoucherSensorEntityId.isNullOrBlank()) {
                     GuestWifiEntryCard(
                         voucher = connectionState.guestVoucher,
@@ -181,7 +198,11 @@ fun AlarmScreen(
                         onClick = { showGuestWifi = true }
                     )
                 }
-                HouseSummaryCard(houseSummaryState, onRefreshHouse)
+                HouseSummaryCard(
+                    state = houseSummaryState,
+                    onRefresh = onRefreshHouse,
+                    onShowMap = { showPeopleMap = true }
+                )
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -235,6 +256,14 @@ fun AlarmScreen(
         )
     }
 
+    if (showPeopleMap) {
+        PersonsMapDialog(
+            persons = houseSummaryState.summary?.persons.orEmpty(),
+            zones = houseSummaryState.summary?.zones.orEmpty(),
+            onDismiss = { showPeopleMap = false }
+        )
+    }
+
     pinAction?.let { action ->
         PinDialog(
             action = action,
@@ -282,9 +311,65 @@ private fun ContextStatusBanner(alarm: AlarmEntityState?) {
 }
 
 @Composable
-private fun HouseSummaryCard(state: HouseSummaryUiState, onRefresh: () -> Unit) {
+private fun WeatherWarningsBanner(warnings: List<WeatherWarning>) {
+    val active = warnings.filter { it.active }
+    if (active.isEmpty()) return
+
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        color = MaterialTheme.colorScheme.errorContainer,
+        shape = MaterialTheme.shapes.large
+    ) {
+        Column(
+            modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text("⚠️", style = MaterialTheme.typography.titleLarge)
+                Text(
+                    stringResource(R.string.weather_warnings_title),
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold
+                )
+                Spacer(Modifier.weight(1f))
+                Text(active.size.toString(), style = MaterialTheme.typography.labelLarge)
+            }
+            active.take(3).forEach { warning ->
+                Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                    Text(
+                        warning.title ?: warning.friendlyName,
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                    warning.severity?.let {
+                        Text(
+                            stringResource(R.string.weather_warning_severity, it),
+                            style = MaterialTheme.typography.labelSmall
+                        )
+                    }
+                    warning.description?.let {
+                        Text(it, style = MaterialTheme.typography.bodySmall)
+                    }
+                }
+            }
+            if (active.size > 3) {
+                Text(
+                    stringResource(R.string.weather_warning_more, active.size - 3),
+                    style = MaterialTheme.typography.labelSmall
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun HouseSummaryCard(
+    state: HouseSummaryUiState,
+    onRefresh: () -> Unit,
+    onShowMap: () -> Unit
+) {
     val summary = state.summary
-    Card(modifier = Modifier.fillMaxWidth(), onClick = onRefresh) {
+    Card(modifier = Modifier.fillMaxWidth()) {
         Column(
             modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp)
@@ -292,12 +377,15 @@ private fun HouseSummaryCard(state: HouseSummaryUiState, onRefresh: () -> Unit) 
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(12.dp)
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 Text(stringResource(R.string.house_status), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
                 Spacer(Modifier.weight(1f))
                 if (state.isLoading) CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
-                Text("↻", style = MaterialTheme.typography.titleMedium)
+                if (!summary?.persons.isNullOrEmpty()) {
+                    TextButton(onClick = onShowMap) { Text("📍 ${stringResource(R.string.people_map)}") }
+                }
+                IconButton(onClick = onRefresh) { Text("↻", style = MaterialTheme.typography.titleMedium) }
             }
             if (summary == null) {
                 Text(state.errorMessage ?: stringResource(R.string.house_status_loading), color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -309,8 +397,10 @@ private fun HouseSummaryCard(state: HouseSummaryUiState, onRefresh: () -> Unit) 
                     Text("🚪 ${summary.openDoors}")
                     Text("🪟 ${summary.openWindows}")
                     Text("💡 ${summary.lightsOn}")
-                    Text("👤 ${summary.personsHome}")
+                    Text("👤 ${summary.personsHome}/${summary.persons.size}")
                     summary.temperatureC?.let { Text("🌡 ${String.format(Locale.getDefault(), "%.1f", it)}°C") }
+                    val activeWarnings = summary.weatherWarnings.count { it.active }
+                    if (activeWarnings > 0) Text("⚠️ $activeWarnings")
                 }
                 if (summary.openEntityNames.isNotEmpty()) {
                     Text(
@@ -319,6 +409,151 @@ private fun HouseSummaryCard(state: HouseSummaryUiState, onRefresh: () -> Unit) 
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
+            }
+        }
+    }
+}
+
+@Composable
+private fun PersonsMapDialog(
+    persons: List<PersonLocation>,
+    zones: List<HomeZoneLocation>,
+    onDismiss: () -> Unit
+) {
+    val located = persons.filter { it.latitude != null && it.longitude != null }
+    val occupiedStates = persons.map { it.state.lowercase() }.toSet()
+    val relevantZones = zones.filter { zone ->
+        zone.entityId == "zone.home" ||
+            zone.friendlyName.lowercase() in occupiedStates ||
+            zone.entityId.removePrefix("zone.").lowercase() in occupiedStates
+    }
+
+    Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
+        Surface(
+            modifier = Modifier.fillMaxWidth(0.94f).fillMaxHeight(0.92f),
+            shape = MaterialTheme.shapes.extraLarge,
+            tonalElevation = 6.dp
+        ) {
+            Column(
+                modifier = Modifier.fillMaxSize().padding(18.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("📍 ${stringResource(R.string.people_map_title)}", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+                    Spacer(Modifier.weight(1f))
+                    TextButton(onClick = onDismiss) { Text(stringResource(R.string.close)) }
+                }
+                Text(
+                    stringResource(R.string.people_map_offline_hint),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+
+                if (located.isEmpty()) {
+                    Card(modifier = Modifier.fillMaxWidth().weight(1f)) {
+                        Column(
+                            modifier = Modifier.fillMaxSize().padding(20.dp),
+                            verticalArrangement = Arrangement.Center,
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            Text("📍", style = MaterialTheme.typography.displayMedium)
+                            Text(stringResource(R.string.people_map_no_coordinates), textAlign = TextAlign.Center)
+                        }
+                    }
+                } else {
+                    OfflinePeopleMap(
+                        persons = located,
+                        zones = relevantZones,
+                        modifier = Modifier.fillMaxWidth().weight(1f)
+                    )
+                }
+
+                Column(
+                    modifier = Modifier.fillMaxWidth().heightIn(max = 180.dp).verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(5.dp)
+                ) {
+                    persons.forEach { person ->
+                        val accuracy = person.gpsAccuracyMeters?.roundToInt()?.let { " · ±${it}m" }.orEmpty()
+                        Text(
+                            "● ${person.friendlyName} — ${person.state}$accuracy",
+                            style = MaterialTheme.typography.bodyMedium
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun OfflinePeopleMap(
+    persons: List<PersonLocation>,
+    zones: List<HomeZoneLocation>,
+    modifier: Modifier = Modifier
+) {
+    val surface = MaterialTheme.colorScheme.surfaceVariant
+    val grid = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.16f)
+    val zoneColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.28f)
+    val zoneBorder = MaterialTheme.colorScheme.primary.copy(alpha = 0.72f)
+    val personColor = MaterialTheme.colorScheme.tertiary
+    val personOutline = MaterialTheme.colorScheme.surface
+
+    val coordinates = buildList<Pair<Double, Double>> {
+        persons.forEach { person ->
+            val lat = person.latitude
+            val lon = person.longitude
+            if (lat != null && lon != null) add(lat to lon)
+        }
+        zones.forEach { add(it.latitude to it.longitude) }
+    }
+    val rawMinLat = coordinates.minOf { it.first }
+    val rawMaxLat = coordinates.maxOf { it.first }
+    val rawMinLon = coordinates.minOf { it.second }
+    val rawMaxLon = coordinates.maxOf { it.second }
+    val latSpanBase = max(rawMaxLat - rawMinLat, 0.01)
+    val lonSpanBase = max(rawMaxLon - rawMinLon, 0.01)
+    val minLat = (rawMinLat + rawMaxLat) / 2.0 - latSpanBase * 0.62
+    val maxLat = (rawMinLat + rawMaxLat) / 2.0 + latSpanBase * 0.62
+    val minLon = (rawMinLon + rawMaxLon) / 2.0 - lonSpanBase * 0.62
+    val maxLon = (rawMinLon + rawMaxLon) / 2.0 + lonSpanBase * 0.62
+    val latSpan = maxLat - minLat
+    val lonSpan = maxLon - minLon
+
+    Card(modifier = modifier) {
+        Canvas(modifier = Modifier.fillMaxSize().padding(8.dp)) {
+            drawRect(surface)
+            for (i in 1..4) {
+                val x = size.width * i / 5f
+                val y = size.height * i / 5f
+                drawLine(grid, Offset(x, 0f), Offset(x, size.height), strokeWidth = 1f)
+                drawLine(grid, Offset(0f, y), Offset(size.width, y), strokeWidth = 1f)
+            }
+
+            fun point(lat: Double, lon: Double): Offset {
+                val x = ((lon - minLon) / lonSpan).toFloat().coerceIn(0f, 1f) * size.width
+                val y = (1.0 - (lat - minLat) / latSpan).toFloat().coerceIn(0f, 1f) * size.height
+                return Offset(x, y)
+            }
+
+            zones.forEach { zone ->
+                val center = point(zone.latitude, zone.longitude)
+                val latMeters = latSpan * 111_320.0
+                val radiusPx = ((zone.radiusMeters / latMeters) * size.height).toFloat().coerceIn(8f, min(size.width, size.height) * 0.22f)
+                drawCircle(zoneColor, radius = radiusPx, center = center)
+                drawCircle(zoneBorder, radius = radiusPx, center = center, style = androidx.compose.ui.graphics.drawscope.Stroke(width = 2f))
+            }
+
+            persons.forEachIndexed { index, person ->
+                val lat = person.latitude ?: return@forEachIndexed
+                val lon = person.longitude ?: return@forEachIndexed
+                val base = point(lat, lon)
+                val angle = (index % 6) * Math.PI / 3.0
+                val offset = if (persons.count { it.latitude == lat && it.longitude == lon } > 1) {
+                    Offset((cos(angle) * 10.0).toFloat(), (kotlin.math.sin(angle) * 10.0).toFloat())
+                } else Offset.Zero
+                val center = base + offset
+                drawCircle(personOutline, radius = 12f, center = center)
+                drawCircle(personColor, radius = 8f, center = center)
             }
         }
     }
@@ -903,35 +1138,78 @@ private fun AlarmActionButton(
 
 @Composable
 private fun ForecastStrip(weatherState: WeatherUiState, onRefresh: () -> Unit) {
-    val daily = weatherState.forecast?.daily.orEmpty()
+    val forecast = weatherState.forecast
+    val daily = forecast?.daily.orEmpty()
+    val current = forecast?.current
     Card(modifier = Modifier.fillMaxWidth()) {
-        if (daily.isEmpty()) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 14.dp, vertical = 10.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = weatherState.errorMessage ?: stringResource(R.string.weather_loading),
-                    modifier = Modifier.weight(1f),
-                    style = MaterialTheme.typography.bodyMedium
-                )
-                TextButton(onClick = onRefresh) { Text(stringResource(R.string.retry)) }
+        Column(
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 10.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        stringResource(R.string.forecast_title),
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                    forecast?.sourceLabel?.let {
+                        Text(it, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                }
+                IconButton(onClick = onRefresh) { Text("↻", style = MaterialTheme.typography.titleMedium) }
             }
-        } else {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .horizontalScroll(rememberScrollState())
-                    .padding(horizontal = 10.dp, vertical = 8.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                daily.forEach { day ->
-                    ForecastDay(day = day, modifier = Modifier.widthIn(min = 100.dp, max = 130.dp))
+
+            if (current != null) {
+                Row(
+                    modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    WeatherMetricChip("🌡", "${current.temperatureC.roundToInt()}°C")
+                    WeatherMetricChip("💨", "${current.windSpeedKmh.roundToInt()} km/h")
+                    current.humidityPercent?.let { WeatherMetricChip("💧", "$it%") }
+                    current.pressureHpa?.let { WeatherMetricChip("◉", "${it.roundToInt()} hPa") }
+                    current.uvIndex?.let { WeatherMetricChip("☀", "UV ${String.format(Locale.getDefault(), "%.1f", it)}") }
+                }
+            }
+
+            if (daily.isEmpty()) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = weatherState.errorMessage ?: stringResource(R.string.weather_loading),
+                        modifier = Modifier.weight(1f),
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                    TextButton(onClick = onRefresh) { Text(stringResource(R.string.retry)) }
+                }
+            } else {
+                Row(
+                    modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    daily.forEach { day ->
+                        ForecastDay(day = day, modifier = Modifier.width(146.dp))
+                    }
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun WeatherMetricChip(icon: String, value: String) {
+    Surface(
+        color = MaterialTheme.colorScheme.surfaceVariant,
+        shape = MaterialTheme.shapes.large
+    ) {
+        Text(
+            "$icon $value",
+            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+            style = MaterialTheme.typography.labelMedium
+        )
     }
 }
 
@@ -942,20 +1220,52 @@ private fun ForecastDay(day: DailyForecast, modifier: Modifier = Modifier) {
     val dayLabel = parsedDate?.format(formatter)?.replaceFirstChar { char ->
         if (char.isLowerCase()) char.titlecase(Locale.getDefault()) else char.toString()
     } ?: day.date
+    val isToday = parsedDate == LocalDate.now()
 
-    Column(modifier = modifier, horizontalAlignment = Alignment.CenterHorizontally) {
-        Text(dayLabel, style = MaterialTheme.typography.labelLarge)
-        Text(weatherEmoji(day.weatherCode), style = MaterialTheme.typography.titleLarge)
-        Text(
-            text = "${day.maximumC.roundToInt()}° / ${day.minimumC.roundToInt()}°",
-            style = MaterialTheme.typography.bodyMedium,
-            fontWeight = FontWeight.Medium
+    Card(
+        modifier = modifier.heightIn(min = 156.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = if (isToday) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant
         )
-        Text(
-            text = "💧 ${day.precipitationProbability}%",
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
+    ) {
+        Column(
+            modifier = Modifier.fillMaxWidth().padding(10.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+            Text(
+                if (isToday) stringResource(R.string.today) else dayLabel,
+                style = MaterialTheme.typography.labelLarge,
+                fontWeight = FontWeight.SemiBold
+            )
+            Text(weatherEmoji(day.weatherCode), style = MaterialTheme.typography.headlineSmall)
+            Text(
+                weatherDescription(day.weatherCode),
+                style = MaterialTheme.typography.labelSmall,
+                textAlign = TextAlign.Center
+            )
+            Text(
+                text = "${day.maximumC.roundToInt()}° / ${day.minimumC.roundToInt()}°",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold
+            )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Text("💧 ${day.precipitationProbability}%", style = MaterialTheme.typography.labelSmall)
+                day.precipitationMm?.let {
+                    Text("${String.format(Locale.getDefault(), "%.1f", it)} mm", style = MaterialTheme.typography.labelSmall)
+                }
+            }
+            LinearProgressIndicator(
+                progress = { day.precipitationProbability.coerceIn(0, 100) / 100f },
+                modifier = Modifier.fillMaxWidth()
+            )
+            day.windSpeedKmh?.let {
+                Text("💨 ${it.roundToInt()} km/h", style = MaterialTheme.typography.labelSmall)
+            }
+        }
     }
 }
 
