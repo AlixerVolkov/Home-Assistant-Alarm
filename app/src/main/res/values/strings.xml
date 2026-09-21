@@ -171,4 +171,10 @@
     <string name="unused_app_title">Keep HomePanel active</string>
     <string name="unused_app_message">For a wall panel, disable the Android option “Pause app activity if unused” / “Manage app if unused”. Otherwise Android can revoke runtime permissions or hibernate HomePanel after a long period of inactivity.</string>
     <string name="later">Later</string>
+    <string name="network_diag_transport">LAN: %1$s · %2$s</string>
+    <string name="network_diag_ipv4">Tablet IPv4: %1$s</string>
+    <string name="network_diag_resolved">Broker resolved to: %1$s</string>
+    <string name="network_diag_tcp_ok">TCP port reachable</string>
+    <string name="network_diag_tcp_fail">TCP port not reachable</string>
+    <string name="rtsp_resolution">Encoder: %1$dx%2$d</string>
 </resources>

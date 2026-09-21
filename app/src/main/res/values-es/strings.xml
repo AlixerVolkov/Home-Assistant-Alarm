@@ -171,4 +171,10 @@
     <string name="unused_app_title">Mantener HomePanel activo</string>
     <string name="unused_app_message">Para un panel de pared, desactiva en Android “Pausar actividad si no se usa” / “Administrar app si no se usa”. De lo contrario Android puede revocar permisos o hibernar HomePanel tras un periodo largo de inactividad.</string>
     <string name="later">Más tarde</string>
+    <string name="network_diag_transport">LAN: %1$s · %2$s</string>
+    <string name="network_diag_ipv4">IPv4 de la tablet: %1$s</string>
+    <string name="network_diag_resolved">Broker resuelto como: %1$s</string>
+    <string name="network_diag_tcp_ok">Puerto TCP accesible</string>
+    <string name="network_diag_tcp_fail">Puerto TCP no accesible</string>
+    <string name="rtsp_resolution">Codificador: %1$dx%2$d</string>
 </resources>

@@ -8,9 +8,11 @@ import android.provider.Settings
 import androidx.core.content.ContextCompat
 import dev.homepanel.app.BuildConfig
 import dev.homepanel.app.data.PanelSettings
+import dev.homepanel.app.network.LanNetworkHelper
 import java.net.Inet4Address
 import java.net.InetAddress
 import java.net.InetSocketAddress
+import java.net.ConnectException
 import java.net.Socket
 import java.net.SocketTimeoutException
 import java.net.UnknownHostException
@@ -38,6 +40,9 @@ data class MqttDeviceState(
     val brokerUri: String? = null,
     val deviceIdentifier: String? = null,
     val resolvedAddress: String? = null,
+    val lanTransport: String? = null,
+    val localIpv4: String? = null,
+    val tcpReachable: Boolean? = null,
     val errorMessage: String? = null
 )
 
@@ -56,6 +61,7 @@ class MqttDeviceBridge(
     private val onScreenCommand: (Boolean) -> Unit
 ) {
     private val appContext = context.applicationContext
+    private val lanNetworkHelper = LanNetworkHelper(appContext)
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val androidId = Settings.Secure.getString(appContext.contentResolver, Settings.Secure.ANDROID_ID)
         ?.lowercase(Locale.US)
@@ -147,30 +153,42 @@ class MqttDeviceBridge(
         activeConfig = config
 
         runCatching {
-            val resolved = resolvePreferredAddress(config.host)
-            // Most Home Assistant/Mosquitto installations are LAN-only. Prefer IPv4 for plain
-            // MQTT because some Android devices resolve the same host to an IPv6 ULA first even
-            // when the broker is only reachable on IPv4. Keep the hostname for TLS so certificate
-            // hostname validation is not broken.
+            val lan = lanNetworkHelper.select()
+                ?: error("No Wi-Fi/Ethernet LAN network detected. Connect the tablet to the same LAN/VLAN as the MQTT broker.")
+            val addresses = lanNetworkHelper.resolve(config.host, lan)
+            val resolved = addresses.filterIsInstance<Inet4Address>()
+                .firstOrNull { !it.isLoopbackAddress }
+                ?: addresses.firstOrNull { !it.isLoopbackAddress }
+                ?: addresses.firstOrNull()
+                ?: throw UnknownHostException(config.host)
+
+            // For plain MQTT use the resolved LAN IPv4 and bind sockets to the selected
+            // Wi-Fi/Ethernet Network. This avoids Android routing MQTT through a VPN or another
+            // default network while Home Assistant itself still appears to work. For TLS keep
+            // the hostname so certificate hostname validation remains correct.
             val connectionHost = if (!config.tls && resolved is Inet4Address) {
                 resolved.hostAddress ?: config.host
             } else {
                 config.host
             }
             val displayUri = brokerUri(config, connectionHost)
-            val resolvedAddress = resolved?.hostAddress
+            val resolvedAddress = resolved.hostAddress
 
             _state.value = MqttDeviceState(
                 enabled = true,
                 connected = false,
                 brokerUri = displayUri,
                 deviceIdentifier = deviceIdentifier,
-                resolvedAddress = resolvedAddress
+                resolvedAddress = resolvedAddress,
+                lanTransport = lan.transport,
+                localIpv4 = lan.ipv4Address,
+                tcpReachable = null
             )
 
-            // Probe TCP first so a firewall/VLAN/closed-port problem is reported as such rather
-            // than as the generic Paho "timed out waiting for a response" message.
-            probeTcp(resolved ?: InetAddress.getByName(config.host), config.port)
+            // Verify the exact LAN route before doing MQTT. A successful TCP probe separates
+            // network/VLAN/firewall failures from MQTT authentication/protocol failures.
+            probeTcp(lan.network.socketFactory, resolved, config.port)
+            _state.value = _state.value.copy(tcpReachable = true)
 
             val mqttClient = MqttAsyncClient(
                 displayUri,
@@ -181,10 +199,15 @@ class MqttDeviceBridge(
             mqttClient.setCallback(callback)
 
             val options = MqttConnectOptions().apply {
+                setMqttVersion(MqttConnectOptions.MQTT_VERSION_3_1_1)
                 setAutomaticReconnect(true)
                 setCleanSession(true)
                 setConnectionTimeout(10)
                 setKeepAliveInterval(30)
+                // Android Network.socketFactory binds plain MQTT to Wi-Fi/Ethernet and bypasses
+                // an unrelated VPN/default route. TLS stays on the platform SSL factory so
+                // certificate validation is not weakened.
+                if (!config.tls) setSocketFactory(lan.network.socketFactory)
                 if (config.username.isNotBlank()) setUserName(config.username)
                 if (config.password.isNotBlank()) setPassword(config.password.toCharArray())
                 setWill(availabilityTopic, "offline".toByteArray(Charsets.UTF_8), 1, true)
@@ -194,6 +217,7 @@ class MqttDeviceBridge(
         }.onFailure { error ->
             _state.value = _state.value.copy(
                 connected = false,
+                tcpReachable = _state.value.tcpReachable ?: false,
                 errorMessage = friendlyConnectionError(config, error)
             )
         }
@@ -216,40 +240,35 @@ class MqttDeviceBridge(
         return value
     }
 
-    private fun resolvePreferredAddress(host: String): InetAddress? {
-        val addresses = InetAddress.getAllByName(host).toList()
-        return addresses.filterIsInstance<Inet4Address>()
-            .firstOrNull { !it.isLoopbackAddress }
-            ?: addresses.firstOrNull { !it.isLoopbackAddress }
-            ?: addresses.firstOrNull()
-    }
-
     private fun brokerUri(config: MqttConfig, host: String): String {
         val scheme = if (config.tls) "ssl" else "tcp"
         val formattedHost = if (host.contains(':') && !host.startsWith('[')) "[$host]" else host
         return "$scheme://$formattedHost:${config.port}"
     }
 
-    private fun probeTcp(address: InetAddress, port: Int) {
-        Socket().use { socket ->
+    private fun probeTcp(socketFactory: javax.net.SocketFactory, address: InetAddress, port: Int) {
+        socketFactory.createSocket().use { socket ->
             socket.connect(InetSocketAddress(address, port), TCP_PROBE_TIMEOUT_MS)
         }
     }
 
     private fun friendlyConnectionError(config: MqttConfig, error: Throwable): String = when (error) {
         is UnknownHostException -> "MQTT host could not be resolved: ${config.host}"
-        is SocketTimeoutException -> "TCP timeout to ${config.host}:${config.port}. Check broker port, VLAN/firewall and TLS setting."
+        is SocketTimeoutException -> "TCP timeout to ${config.host}:${config.port}. The tablet cannot reach the broker on the LAN; check VLAN/firewall/port and Wi-Fi client isolation."
+        is ConnectException -> "TCP connection refused to ${config.host}:${config.port}. Check that Mosquitto is listening on this address/port."
         is SecurityException -> "Android blocked local-network access. Grant the Local network permission to HomePanel."
         else -> error.message ?: "Could not connect to MQTT broker ${config.host}:${config.port}"
     }
 
     private fun onConnected(mqttClient: MqttAsyncClient, brokerUri: String?) {
         if (client !== mqttClient || !mqttClient.isConnected) return
-        _state.value = MqttDeviceState(
+        _state.value = _state.value.copy(
             enabled = true,
             connected = true,
             brokerUri = brokerUri ?: _state.value.brokerUri,
-            deviceIdentifier = deviceIdentifier
+            deviceIdentifier = deviceIdentifier,
+            tcpReachable = true,
+            errorMessage = null
         )
         runCatching {
             mqttClient.subscribe(screenCommandTopic, 1).waitForCompletion(5_000L)

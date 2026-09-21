@@ -81,16 +81,16 @@ jobs:
         run: |
           test -f app/build/outputs/apk/release/app-release.apk
           mkdir -p dist
-          cp app/build/outputs/apk/release/app-release.apk dist/HomePanel-v0.6.1.apk
-          "$ANDROID_HOME/build-tools/36.0.0/apksigner" verify --verbose --print-certs dist/HomePanel-v0.6.1.apk
-          sha256sum dist/HomePanel-v0.6.1.apk > dist/HomePanel-v0.6.1.apk.sha256
-          ls -lh dist/HomePanel-v0.6.1.apk
+          cp app/build/outputs/apk/release/app-release.apk dist/HomePanel-v0.6.2.apk
+          "$ANDROID_HOME/build-tools/36.0.0/apksigner" verify --verbose --print-certs dist/HomePanel-v0.6.2.apk
+          sha256sum dist/HomePanel-v0.6.2.apk > dist/HomePanel-v0.6.2.apk.sha256
+          ls -lh dist/HomePanel-v0.6.2.apk
 
       - name: Upload signed APK
         uses: actions/upload-artifact@v7
         with:
-          name: HomePanel-v0.6.1-signed-apk
+          name: HomePanel-v0.6.2-signed-apk
           path: |
-            dist/HomePanel-v0.6.1.apk
-            dist/HomePanel-v0.6.1.apk.sha256
+            dist/HomePanel-v0.6.2.apk
+            dist/HomePanel-v0.6.2.apk.sha256
           if-no-files-found: error

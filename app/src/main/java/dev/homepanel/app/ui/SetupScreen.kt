@@ -476,6 +476,24 @@ fun SetupScreen(
                                             style = MaterialTheme.typography.labelSmall,
                                             color = MaterialTheme.colorScheme.onSurfaceVariant
                                         )
+                                        rtspCameraState.lanTransport?.let { transport ->
+                                            Text(
+                                                stringResource(
+                                                    R.string.network_diag_transport,
+                                                    transport,
+                                                    rtspCameraState.interfaceName.orEmpty()
+                                                ),
+                                                style = MaterialTheme.typography.labelSmall,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                            )
+                                        }
+                                        if (rtspCameraState.width > 0 && rtspCameraState.height > 0) {
+                                            Text(
+                                                stringResource(R.string.rtsp_resolution, rtspCameraState.width, rtspCameraState.height),
+                                                style = MaterialTheme.typography.labelSmall,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                            )
+                                        }
                                     } else if (rtspAdvertisedHost.isBlank()) {
                                         Text(
                                             stringResource(R.string.rtsp_no_ipv4),
@@ -599,6 +617,29 @@ fun SetupScreen(
                                     MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant
                             )
                             mqttDeviceState.brokerUri?.let { Text(it, style = MaterialTheme.typography.labelSmall) }
+                            mqttDeviceState.lanTransport?.let { transport ->
+                                Text(
+                                    stringResource(
+                                        R.string.network_diag_transport,
+                                        transport,
+                                        mqttDeviceState.localIpv4.orEmpty()
+                                    ),
+                                    style = MaterialTheme.typography.labelSmall
+                                )
+                            }
+                            mqttDeviceState.localIpv4?.let {
+                                Text(stringResource(R.string.network_diag_ipv4, it), style = MaterialTheme.typography.labelSmall)
+                            }
+                            mqttDeviceState.resolvedAddress?.let {
+                                Text(stringResource(R.string.network_diag_resolved, it), style = MaterialTheme.typography.labelSmall)
+                            }
+                            mqttDeviceState.tcpReachable?.let { reachable ->
+                                Text(
+                                    stringResource(if (reachable) R.string.network_diag_tcp_ok else R.string.network_diag_tcp_fail),
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = if (reachable) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error
+                                )
+                            }
                         }
                     }
                 }

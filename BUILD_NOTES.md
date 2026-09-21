@@ -46,3 +46,8 @@ No se ejecuto `assembleRelease` localmente porque este contenedor no dispone de 
 - MQTT already waits for `ACCESS_LOCAL_NETWORK`; HomePanel retries it after grant.
 - Home Assistant LAN/WebSocket connection is retried after grant.
 - Unused-app restriction / hibernation status is checked through AndroidX Core and the user can jump to the OS settings page to disable it.
+
+
+## v0.6.2 LAN diagnostics and routing
+
+MQTT is now bound to the selected Wi-Fi/Ethernet `Network`, and Settings shows the LAN IPv4, broker resolution and TCP reachability. RTSP startup order and encoder fallback were also hardened.

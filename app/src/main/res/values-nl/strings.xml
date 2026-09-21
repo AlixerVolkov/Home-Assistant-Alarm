@@ -117,4 +117,10 @@
     <string name="unused_app_title">HomePanel actief houden</string>
     <string name="unused_app_message">Voor een wandpaneel kun je in Android “App-activiteit onderbreken indien ongebruikt” / “App beheren indien niet gebruikt” beter uitschakelen. Anders kan Android machtigingen intrekken of HomePanel na lange inactiviteit in slaapstand zetten.</string>
     <string name="later">Later</string>
+    <string name="network_diag_transport">LAN: %1$s · %2$s</string>
+    <string name="network_diag_ipv4">Tablet IPv4: %1$s</string>
+    <string name="network_diag_resolved">Broker opgelost als: %1$s</string>
+    <string name="network_diag_tcp_ok">TCP-poort bereikbaar</string>
+    <string name="network_diag_tcp_fail">TCP-poort niet bereikbaar</string>
+    <string name="rtsp_resolution">Encoder: %1$dx%2$d</string>
 </resources>
