@@ -12,6 +12,8 @@ data class PanelSettings(
     val kioskModeEnabled: Boolean = false,
     val settingsPin: String = "",
     val updateChecksEnabled: Boolean = true,
+    val weatherSource: String = "home_assistant",
+    val weatherEntityId: String? = null,
     val rtspEnabled: Boolean = false,
     val rtspPort: Int = 8554,
     val rtspAdvertisedHost: String = "",

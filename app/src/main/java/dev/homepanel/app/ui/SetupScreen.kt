@@ -40,11 +40,14 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import dev.homepanel.app.DiscoveryState
+import dev.homepanel.app.MainViewModel
 import dev.homepanel.app.R
 import dev.homepanel.app.UpdateUiState
 import dev.homepanel.app.camera.RtspCameraState
 import dev.homepanel.app.data.PanelSettings
 import dev.homepanel.app.mqtt.MqttDeviceState
+import dev.homepanel.app.network.DiagnosticStatus
+import dev.homepanel.app.network.NetworkDiagnosticsState
 import java.net.URI
 
 @Composable
@@ -54,10 +57,12 @@ fun SetupScreen(
     rtspCameraState: RtspCameraState,
     mqttDeviceState: MqttDeviceState,
     updateState: UpdateUiState,
+    networkDiagnosticsState: NetworkDiagnosticsState,
     canCancel: Boolean,
     onDiscover: (String, String) -> Unit,
     onCheckUpdate: () -> Unit,
     onDownloadUpdate: () -> Unit,
+    onRunNetworkDiagnostics: (PanelSettings) -> Unit,
     onSave: (PanelSettings) -> Unit,
     onCancel: () -> Unit,
     onClear: () -> Unit
@@ -94,6 +99,12 @@ fun SetupScreen(
     }
     var updateChecksEnabled by rememberSaveable(initialSettings?.updateChecksEnabled) {
         mutableStateOf(initialSettings?.updateChecksEnabled ?: true)
+    }
+    var weatherSource by rememberSaveable(initialSettings?.weatherSource) {
+        mutableStateOf(initialSettings?.weatherSource ?: MainViewModel.WEATHER_SOURCE_HOME_ASSISTANT)
+    }
+    var weatherEntityId by rememberSaveable(initialSettings?.weatherEntityId) {
+        mutableStateOf(initialSettings?.weatherEntityId.orEmpty())
     }
     var rtspEnabled by rememberSaveable(initialSettings?.rtspEnabled) {
         mutableStateOf(initialSettings?.rtspEnabled ?: false)
@@ -145,9 +156,46 @@ fun SetupScreen(
         }
     }
 
+    LaunchedEffect(discoveryState.weatherEntities, weatherSource) {
+        if (weatherSource == MainViewModel.WEATHER_SOURCE_HOME_ASSISTANT &&
+            weatherEntityId.isBlank() && discoveryState.weatherEntities.size == 1
+        ) {
+            weatherEntityId = discoveryState.weatherEntities.single().entityId
+        }
+    }
+
     val context = LocalContext.current
     var rtspCopied by rememberSaveable { mutableStateOf(false) }
     var frigateCopied by rememberSaveable { mutableStateOf(false) }
+
+    fun draftSettings(): PanelSettings = PanelSettings(
+        baseUrl = baseUrl,
+        accessToken = token,
+        alarmEntityId = entityId,
+        wakeEntityId = wakeEntityId.takeIf { it.isNotBlank() },
+        screensaverTimeoutMinutes = saverMinutes.toIntOrNull() ?: 0,
+        sleepTimeoutMinutes = sleepMinutes.toIntOrNull() ?: 0,
+        proximityWakeEnabled = proximityWakeEnabled,
+        autoBrightnessEnabled = autoBrightnessEnabled,
+        kioskModeEnabled = kioskModeEnabled,
+        settingsPin = settingsPin,
+        updateChecksEnabled = updateChecksEnabled,
+        weatherSource = weatherSource,
+        weatherEntityId = weatherEntityId.takeIf { it.isNotBlank() },
+        rtspEnabled = rtspEnabled,
+        rtspPort = rtspPort.toIntOrNull() ?: 8554,
+        rtspAdvertisedHost = rtspAdvertisedHost,
+        guestVoucherSensorEntityId = guestVoucherSensor.takeIf { it.isNotBlank() },
+        guestCreateButtonEntityId = guestCreateButton.takeIf { it.isNotBlank() },
+        guestDeleteButtonEntityId = guestDeleteButton.takeIf { it.isNotBlank() },
+        guestQrImageEntityId = guestQrImage.takeIf { it.isNotBlank() },
+        mqttDiscoveryEnabled = mqttDiscoveryEnabled,
+        mqttHost = mqttHost,
+        mqttPort = mqttPort.toIntOrNull() ?: if (mqttTls) 8883 else 1883,
+        mqttUsername = mqttUsername,
+        mqttPassword = mqttPassword,
+        mqttTls = mqttTls
+    )
 
     BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
         val horizontalPadding = if (maxWidth < 600.dp) 16.dp else 32.dp
@@ -265,6 +313,106 @@ fun SetupScreen(
                     placeholder = { Text("alarm_control_panel.home") },
                     singleLine = true
                 )
+
+                HorizontalDivider()
+
+                Text(stringResource(R.string.weather_settings_title), style = MaterialTheme.typography.titleMedium)
+                Text(
+                    stringResource(R.string.weather_settings_subtitle),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { weatherSource = MainViewModel.WEATHER_SOURCE_HOME_ASSISTANT }
+                ) {
+                    Row(
+                        modifier = Modifier.padding(12.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        RadioButton(
+                            selected = weatherSource == MainViewModel.WEATHER_SOURCE_HOME_ASSISTANT,
+                            onClick = { weatherSource = MainViewModel.WEATHER_SOURCE_HOME_ASSISTANT }
+                        )
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(stringResource(R.string.weather_source_ha), style = MaterialTheme.typography.titleSmall)
+                            Text(
+                                stringResource(R.string.weather_source_ha_hint),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                }
+
+                if (weatherSource == MainViewModel.WEATHER_SOURCE_HOME_ASSISTANT) {
+                    discoveryState.weatherEntities.forEach { entity ->
+                        Card(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { weatherEntityId = entity.entityId }
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(12.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(10.dp)
+                            ) {
+                                RadioButton(
+                                    selected = weatherEntityId == entity.entityId,
+                                    onClick = { weatherEntityId = entity.entityId }
+                                )
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(entity.friendlyName, style = MaterialTheme.typography.titleSmall)
+                                    Text("${entity.entityId} · ${entity.condition}", style = MaterialTheme.typography.bodySmall)
+                                }
+                            }
+                        }
+                    }
+                    OutlinedTextField(
+                        value = weatherEntityId,
+                        onValueChange = { weatherEntityId = it.trim() },
+                        modifier = Modifier.fillMaxWidth(),
+                        label = { Text(stringResource(R.string.weather_entity_manual)) },
+                        placeholder = { Text("weather.forecast_home") },
+                        supportingText = { Text(stringResource(R.string.weather_entity_hint)) },
+                        singleLine = true
+                    )
+                    if (discoveryState.hasRun && discoveryState.weatherEntities.isEmpty()) {
+                        Text(
+                            stringResource(R.string.weather_entity_not_found),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.error
+                        )
+                    }
+                }
+
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { weatherSource = MainViewModel.WEATHER_SOURCE_OPEN_METEO }
+                ) {
+                    Row(
+                        modifier = Modifier.padding(12.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        RadioButton(
+                            selected = weatherSource == MainViewModel.WEATHER_SOURCE_OPEN_METEO,
+                            onClick = { weatherSource = MainViewModel.WEATHER_SOURCE_OPEN_METEO }
+                        )
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(stringResource(R.string.weather_source_open_meteo), style = MaterialTheme.typography.titleSmall)
+                            Text(
+                                stringResource(R.string.weather_source_open_meteo_hint),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                }
 
                 HorizontalDivider()
 
@@ -704,6 +852,54 @@ fun SetupScreen(
                 )
 
                 HorizontalDivider()
+                Text(stringResource(R.string.network_diagnostics_title), style = MaterialTheme.typography.titleMedium)
+                Text(
+                    stringResource(R.string.network_diagnostics_subtitle),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                OutlinedButton(
+                    onClick = { onRunNetworkDiagnostics(draftSettings()) },
+                    enabled = !networkDiagnosticsState.isRunning && baseUrl.isNotBlank() && token.isNotBlank()
+                ) {
+                    Text(
+                        if (networkDiagnosticsState.isRunning) stringResource(R.string.network_diagnostics_running)
+                        else stringResource(R.string.network_diagnostics_run)
+                    )
+                }
+                if (networkDiagnosticsState.items.isNotEmpty()) {
+                    Card(modifier = Modifier.fillMaxWidth()) {
+                        Column(
+                            modifier = Modifier.padding(14.dp),
+                            verticalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
+                            networkDiagnosticsState.items.forEach { item ->
+                                val prefix = when (item.status) {
+                                    DiagnosticStatus.OK -> "✓"
+                                    DiagnosticStatus.FAILED -> "✕"
+                                    DiagnosticStatus.SKIPPED -> "–"
+                                    DiagnosticStatus.RUNNING -> "…"
+                                }
+                                Column {
+                                    Text(
+                                        "$prefix ${diagnosticLabel(item.key)}",
+                                        style = MaterialTheme.typography.titleSmall,
+                                        color = if (item.status == DiagnosticStatus.FAILED) MaterialTheme.colorScheme.error
+                                        else MaterialTheme.colorScheme.onSurface
+                                    )
+                                    val latency = item.latencyMs?.let { " · ${it} ms" }.orEmpty()
+                                    Text(
+                                        item.detail + latency,
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+
+                HorizontalDivider()
                 Text(stringResource(R.string.update_title), style = MaterialTheme.typography.titleMedium)
                 SettingsSwitchRow(
                     title = stringResource(R.string.update_auto_check),
@@ -744,34 +940,7 @@ fun SetupScreen(
                 ) {
                     Button(
                         onClick = {
-                            onSave(
-                                PanelSettings(
-                                    baseUrl = baseUrl,
-                                    accessToken = token,
-                                    alarmEntityId = entityId,
-                                    wakeEntityId = wakeEntityId.takeIf { it.isNotBlank() },
-                                    screensaverTimeoutMinutes = saverMinutes.toIntOrNull() ?: 0,
-                                    sleepTimeoutMinutes = sleepMinutes.toIntOrNull() ?: 0,
-                                    proximityWakeEnabled = proximityWakeEnabled,
-                                    autoBrightnessEnabled = autoBrightnessEnabled,
-                                    kioskModeEnabled = kioskModeEnabled,
-                                    settingsPin = settingsPin,
-                                    updateChecksEnabled = updateChecksEnabled,
-                                    rtspEnabled = rtspEnabled,
-                                    rtspPort = rtspPort.toIntOrNull() ?: 8554,
-                                    rtspAdvertisedHost = rtspAdvertisedHost,
-                                    guestVoucherSensorEntityId = guestVoucherSensor.takeIf { it.isNotBlank() },
-                                    guestCreateButtonEntityId = guestCreateButton.takeIf { it.isNotBlank() },
-                                    guestDeleteButtonEntityId = guestDeleteButton.takeIf { it.isNotBlank() },
-                                    guestQrImageEntityId = guestQrImage.takeIf { it.isNotBlank() },
-                                    mqttDiscoveryEnabled = mqttDiscoveryEnabled,
-                                    mqttHost = mqttHost,
-                                    mqttPort = mqttPort.toIntOrNull() ?: if (mqttTls) 8883 else 1883,
-                                    mqttUsername = mqttUsername,
-                                    mqttPassword = mqttPassword,
-                                    mqttTls = mqttTls
-                                )
-                            )
+                            onSave(draftSettings())
                         },
                         enabled = baseUrl.isNotBlank() && token.isNotBlank() && entityId.isNotBlank() &&
                             (!mqttDiscoveryEnabled || mqttHost.isNotBlank()),
@@ -797,6 +966,18 @@ fun SetupScreen(
             }
         }
     }
+}
+
+@Composable
+private fun diagnosticLabel(key: String): String = when (key) {
+    "lan" -> stringResource(R.string.network_diagnostics_lan)
+    "home_assistant" -> stringResource(R.string.network_diagnostics_ha)
+    "weather_ha" -> stringResource(R.string.network_diagnostics_weather_ha)
+    "open_meteo" -> stringResource(R.string.network_diagnostics_open_meteo)
+    "github" -> stringResource(R.string.network_diagnostics_github)
+    "mqtt" -> stringResource(R.string.network_diagnostics_mqtt)
+    "rtsp" -> stringResource(R.string.network_diagnostics_rtsp)
+    else -> key
 }
 
 @Composable

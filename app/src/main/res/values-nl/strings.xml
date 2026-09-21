@@ -3,7 +3,7 @@
     <string name="app_name">HomePanel</string>
     <string name="setup_title">Verbinden met Home Assistant</string>
     <string name="setup_subtitle">Voer de Home Assistant-URL en een langdurig toegangstoken in en zoek daarna alarm- en bewegingssensoren.</string>
-    <string name="system_locale_hint">Taal, datum, tijdzone en weerlocatie volgen automatisch dit apparaat.</string>
+    <string name="system_locale_hint">Taal, datum en tijdzone volgen automatisch dit apparaat. De weerbron is instelbaar.</string>
     <string name="ha_url">Home Assistant-URL</string><string name="access_token">Toegangstoken</string>
     <string name="discover_alarms">Apparaten zoeken</string><string name="discovering">Zoeken...</string><string name="select_alarm">Selecteer een alarm</string><string name="save_connect">Opslaan en verbinden</string><string name="no_alarms">Geen alarm_control_panel-entiteiten gevonden.</string>
     <string name="http_warning">Waarschuwing: HTTP verstuurt het token zonder transportversleuteling. Gebruik bij voorkeur HTTPS/WSS.</string>
@@ -127,4 +127,26 @@
     <string name="crash_detected_message">Tijdens de vorige uitvoering is een crash geregistreerd. Kopieer het rapport voor diagnose.</string>
     <string name="crash_safe_mode_message">Tijdens het opstarten is een crash geregistreerd. Deze start gebruikt Veilige modus: RTSP, MQTT, sensoren en automatische updatecontroles zijn tijdelijk uitgeschakeld. Kopieer het rapport voor diagnose.</string>
     <string name="copy_crash_report">Crashrapport kopiëren</string>
+
+    <string name="weather_settings_title">Weerbron</string>
+    <string name="weather_settings_subtitle">Gebruik een weather-entiteit uit Home Assistant (aanbevolen) of vraag Open-Meteo rechtstreeks vanaf de tablet op.</string>
+    <string name="weather_source_ha">Home Assistant weather-entiteit</string>
+    <string name="weather_source_ha_hint">Gebruikt de bestaande Home Assistant-verbinding. De tablet heeft geen directe internettoegang nodig voor het weer.</string>
+    <string name="weather_entity_manual">weather-entiteit-ID</string>
+    <string name="weather_entity_hint">Druk op Ontdekken om weather.*-entiteiten te tonen. Laat leeg om de eerste gevonden entiteit te gebruiken.</string>
+    <string name="weather_entity_not_found">Geen weather.*-entiteit gevonden in Home Assistant.</string>
+    <string name="weather_source_open_meteo">Open-Meteo (direct internet)</string>
+    <string name="weather_source_open_meteo_hint">Gebruikt api.open-meteo.com:443 en de Android-locatie van het apparaat.</string>
+    <string name="network_diagnostics_title">Netwerkdiagnose</string>
+    <string name="network_diagnostics_subtitle">Test de paden die HomePanel gebruikt voor LAN, Home Assistant, weer, GitHub-updates, MQTT en de lokale RTSP-listener.</string>
+    <string name="network_diagnostics_run">Diagnose uitvoeren</string>
+    <string name="network_diagnostics_running">Bezig met testen…</string>
+    <string name="network_diagnostics_lan">LAN / IPv4</string>
+    <string name="network_diagnostics_ha">Home Assistant</string>
+    <string name="network_diagnostics_weather">Weerbron</string>
+    <string name="network_diagnostics_github">GitHub-updates</string>
+    <string name="network_diagnostics_mqtt">MQTT-broker</string>
+    <string name="network_diagnostics_rtsp">Lokale RTSP-listener</string>
+    <string name="network_diagnostics_weather_ha">Home Assistant-weer</string>
+    <string name="network_diagnostics_open_meteo">Open-Meteo / internet</string>
 </resources>

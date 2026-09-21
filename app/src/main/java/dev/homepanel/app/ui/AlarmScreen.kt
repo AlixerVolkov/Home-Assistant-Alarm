@@ -733,12 +733,18 @@ private fun CurrentWeatherBlock(
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
+                        Text(
+                            text = forecast?.sourceLabel.orEmpty(),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 1
+                        )
                     }
                     IconButton(onClick = onRefresh) { Text("↻") }
                 }
                 else -> {
                     Column(modifier = Modifier.weight(1f)) {
-                        Text(stringResource(R.string.weather_auto_location), style = MaterialTheme.typography.labelLarge)
+                        Text(stringResource(R.string.weather_unavailable), style = MaterialTheme.typography.labelLarge)
                         Text(
                             weatherState.errorMessage ?: stringResource(R.string.weather_unavailable),
                             style = MaterialTheme.typography.bodySmall

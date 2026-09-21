@@ -41,6 +41,8 @@ class SettingsRepository(
                     ?.let { runCatching { cryptoManager.decrypt(it) }.getOrDefault("") }
                     .orEmpty(),
                 updateChecksEnabled = preferences[KEY_UPDATE_CHECKS] ?: true,
+                weatherSource = preferences[KEY_WEATHER_SOURCE] ?: "home_assistant",
+                weatherEntityId = preferences[KEY_WEATHER_ENTITY]?.takeIf { it.isNotBlank() },
                 rtspEnabled = preferences[KEY_RTSP_ENABLED] ?: false,
                 rtspPort = preferences[KEY_RTSP_PORT] ?: 8554,
                 rtspAdvertisedHost = preferences[KEY_RTSP_ADVERTISED_HOST].orEmpty(),
@@ -81,6 +83,8 @@ class SettingsRepository(
                 preferences[KEY_SETTINGS_PIN] = cryptoManager.encrypt(settings.settingsPin.trim())
             }
             preferences[KEY_UPDATE_CHECKS] = settings.updateChecksEnabled
+            preferences[KEY_WEATHER_SOURCE] = settings.weatherSource
+            preferences[KEY_WEATHER_ENTITY] = settings.weatherEntityId?.trim().orEmpty()
             preferences[KEY_RTSP_ENABLED] = settings.rtspEnabled
             preferences[KEY_RTSP_PORT] = settings.rtspPort.coerceIn(1024, 65535)
             preferences[KEY_RTSP_ADVERTISED_HOST] = settings.rtspAdvertisedHost.trim()
@@ -114,6 +118,8 @@ class SettingsRepository(
             preferences.remove(KEY_KIOSK_MODE)
             preferences.remove(KEY_SETTINGS_PIN)
             preferences.remove(KEY_UPDATE_CHECKS)
+            preferences.remove(KEY_WEATHER_SOURCE)
+            preferences.remove(KEY_WEATHER_ENTITY)
             preferences.remove(KEY_RTSP_ENABLED)
             preferences.remove(KEY_RTSP_PORT)
             preferences.remove(KEY_RTSP_ADVERTISED_HOST)
@@ -142,6 +148,8 @@ class SettingsRepository(
         private val KEY_KIOSK_MODE = booleanPreferencesKey("kiosk_mode")
         private val KEY_SETTINGS_PIN = stringPreferencesKey("settings_pin")
         private val KEY_UPDATE_CHECKS = booleanPreferencesKey("update_checks")
+        private val KEY_WEATHER_SOURCE = stringPreferencesKey("weather_source")
+        private val KEY_WEATHER_ENTITY = stringPreferencesKey("weather_entity_id")
         private val KEY_RTSP_ENABLED = booleanPreferencesKey("rtsp_enabled")
         private val KEY_RTSP_PORT = intPreferencesKey("rtsp_port")
         private val KEY_RTSP_ADVERTISED_HOST = stringPreferencesKey("rtsp_advertised_host")

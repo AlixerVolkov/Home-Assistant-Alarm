@@ -19,5 +19,6 @@ data class WeatherForecast(
     val current: CurrentWeather,
     val daily: List<DailyForecast>,
     val locationLabel: String,
-    val timezoneId: String
+    val timezoneId: String,
+    val sourceLabel: String = "Open-Meteo"
 )

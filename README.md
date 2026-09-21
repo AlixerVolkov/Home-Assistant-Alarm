@@ -1,6 +1,14 @@
-# HomePanel v0.6.5
+# HomePanel v0.6.6
 
 Panel Android moderno para Home Assistant / Alarmo, pensado para tablets de pared.
+
+## v0.6.6: Weather de Home Assistant + diagnóstico de red
+
+- Nueva fuente de tiempo **Home Assistant** (predeterminada), usando una entidad `weather.*`.
+- HomePanel obtiene el estado actual desde la entidad y el pronóstico mediante `weather.get_forecasts`.
+- Open-Meteo sigue disponible como opción alternativa directa.
+- Con Home Assistant como fuente del tiempo, la tablet no necesita permiso de ubicación ni salida directa a `api.open-meteo.com`.
+- Nueva pantalla de **Diagnóstico de red** para probar LAN/IPv4, Home Assistant, weather de HA, Open-Meteo, GitHub, MQTT y el listener RTSP local.
 
 ## Funciones principales
 

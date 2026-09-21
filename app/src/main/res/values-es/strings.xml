@@ -3,7 +3,7 @@
     <string name="app_name">HomePanel</string>
     <string name="setup_title">Conectar con Home Assistant</string>
     <string name="setup_subtitle">Introduce la URL de Home Assistant y un token de larga duración; después detecta la alarma y sensores de movimiento.</string>
-    <string name="system_locale_hint">Idioma, fecha, zona horaria y ubicación del tiempo se toman automáticamente de este dispositivo.</string>
+    <string name="system_locale_hint">El idioma, la fecha y la zona horaria siguen automáticamente este dispositivo. La fuente del tiempo es configurable.</string>
     <string name="ha_url">URL de Home Assistant</string>
     <string name="access_token">Token de acceso</string>
     <string name="discover_alarms">Detectar dispositivos</string>
@@ -181,4 +181,26 @@
     <string name="crash_detected_message">Se registró un fallo en la ejecución anterior. Copia el informe y envíalo para poder diagnosticarlo.</string>
     <string name="crash_safe_mode_message">Se registró un fallo durante el arranque. Esta ejecución usa Modo seguro: RTSP, MQTT, sensores y las comprobaciones automáticas de actualización están desactivados temporalmente. Copia el informe para diagnosticarlo.</string>
     <string name="copy_crash_report">Copiar informe de fallo</string>
+
+    <string name="weather_settings_title">Fuente del tiempo</string>
+    <string name="weather_settings_subtitle">Usa una entidad weather de Home Assistant (recomendado) o consulta Open-Meteo directamente desde la tablet.</string>
+    <string name="weather_source_ha">Entidad weather de Home Assistant</string>
+    <string name="weather_source_ha_hint">Usa la conexión existente con Home Assistant. La tablet no necesita acceso directo a Internet para el tiempo.</string>
+    <string name="weather_entity_manual">ID de entidad weather</string>
+    <string name="weather_entity_hint">Pulsa Descubrir para listar las entidades weather.*. Déjalo vacío para usar la primera entidad encontrada.</string>
+    <string name="weather_entity_not_found">No se encontró ninguna entidad weather.* en Home Assistant.</string>
+    <string name="weather_source_open_meteo">Open-Meteo (Internet directo)</string>
+    <string name="weather_source_open_meteo_hint">Usa api.open-meteo.com:443 y la ubicación Android del dispositivo.</string>
+    <string name="network_diagnostics_title">Diagnóstico de red</string>
+    <string name="network_diagnostics_subtitle">Prueba las rutas que usa HomePanel para LAN, Home Assistant, tiempo, actualizaciones de GitHub, MQTT y el listener RTSP local.</string>
+    <string name="network_diagnostics_run">Ejecutar diagnóstico</string>
+    <string name="network_diagnostics_running">Probando…</string>
+    <string name="network_diagnostics_lan">LAN / IPv4</string>
+    <string name="network_diagnostics_ha">Home Assistant</string>
+    <string name="network_diagnostics_weather">Fuente del tiempo</string>
+    <string name="network_diagnostics_github">Actualizaciones GitHub</string>
+    <string name="network_diagnostics_mqtt">Broker MQTT</string>
+    <string name="network_diagnostics_rtsp">Listener RTSP local</string>
+    <string name="network_diagnostics_weather_ha">Tiempo de Home Assistant</string>
+    <string name="network_diagnostics_open_meteo">Open-Meteo / Internet</string>
 </resources>

@@ -78,6 +78,7 @@ fun HomePanelApp(viewModel: MainViewModel) {
     val houseSummary by viewModel.houseSummary.collectAsStateWithLifecycle()
     val history by viewModel.history.collectAsStateWithLifecycle()
     val update by viewModel.update.collectAsStateWithLifecycle()
+    val networkDiagnostics by viewModel.networkDiagnostics.collectAsStateWithLifecycle()
     val ambientLux by viewModel.ambientLux.collectAsStateWithLifecycle()
     val rtspCamera by viewModel.rtspCamera.collectAsStateWithLifecycle()
     val mqttDevice by viewModel.mqttDevice.collectAsStateWithLifecycle()
@@ -97,6 +98,7 @@ fun HomePanelApp(viewModel: MainViewModel) {
     var showLocalNetworkDenied by rememberSaveable { mutableStateOf(false) }
     var showUnusedAppRestrictions by rememberSaveable { mutableStateOf(false) }
     var unusedAppStatusChecked by rememberSaveable { mutableStateOf(false) }
+    var locationPermissionPrompted by rememberSaveable { mutableStateOf(false) }
 
     val unknownSourcesLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.StartActivityForResult()
@@ -114,6 +116,7 @@ fun HomePanelApp(viewModel: MainViewModel) {
     val locationPermissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
     ) { result ->
+        locationPermissionPrompted = true
         if (result.values.any { it }) viewModel.refreshDeviceLocation()
         startupPermissionStage = 3
     }
@@ -189,20 +192,42 @@ fun HomePanelApp(viewModel: MainViewModel) {
                 }
             }
             2 -> {
-                if (safeMode) {
+                val needsLocation = settings?.weatherSource == MainViewModel.WEATHER_SOURCE_OPEN_METEO
+                if (safeMode || !needsLocation) {
+                    if (!safeMode && settings != null) viewModel.refreshWeather()
                     startupPermissionStage = 3
                 } else if (viewModel.hasLocationPermission()) {
                     viewModel.refreshDeviceLocation()
                     startupPermissionStage = 3
-                } else {
+                } else if (!locationPermissionPrompted) {
+                    locationPermissionPrompted = true
                     locationPermissionLauncher.launch(
                         arrayOf(
                             Manifest.permission.ACCESS_COARSE_LOCATION,
                             Manifest.permission.ACCESS_FINE_LOCATION
                         )
                     )
+                } else {
+                    startupPermissionStage = 3
                 }
             }
+        }
+    }
+
+    // If Open-Meteo is selected later from Settings, request location once. Home Assistant
+    // weather does not need Android location permission at all.
+    LaunchedEffect(settings?.weatherSource, editing, settingsLoaded) {
+        if (settingsLoaded && !editing && !safeMode &&
+            settings?.weatherSource == MainViewModel.WEATHER_SOURCE_OPEN_METEO &&
+            !viewModel.hasLocationPermission() && !locationPermissionPrompted
+        ) {
+            locationPermissionPrompted = true
+            locationPermissionLauncher.launch(
+                arrayOf(
+                    Manifest.permission.ACCESS_COARSE_LOCATION,
+                    Manifest.permission.ACCESS_FINE_LOCATION
+                )
+            )
         }
     }
 
@@ -336,10 +361,12 @@ fun HomePanelApp(viewModel: MainViewModel) {
                 rtspCameraState = rtspCamera,
                 mqttDeviceState = mqttDevice,
                 updateState = update,
+                networkDiagnosticsState = networkDiagnostics,
                 canCancel = currentSettings != null,
                 onDiscover = viewModel::discoverAlarms,
                 onCheckUpdate = { viewModel.checkForUpdates() },
                 onDownloadUpdate = viewModel::downloadUpdate,
+                onRunNetworkDiagnostics = viewModel::runNetworkDiagnostics,
                 onSave = viewModel::saveConfiguration,
                 onCancel = viewModel::cancelEditing,
                 onClear = viewModel::clearConfiguration

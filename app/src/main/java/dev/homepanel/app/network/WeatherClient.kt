@@ -70,9 +70,23 @@ class WeatherClient(
                 current = current,
                 daily = days,
                 locationLabel = location.displayName,
-                timezoneId = json.optString("timezone", location.timezoneId)
+                timezoneId = json.optString("timezone", location.timezoneId),
+                sourceLabel = "Open-Meteo"
             )
         }
+    }
+
+    suspend fun probe(): Long = withContext(Dispatchers.IO) {
+        val url = API_URL.toHttpUrl().newBuilder()
+            .addQueryParameter("latitude", "0")
+            .addQueryParameter("longitude", "0")
+            .addQueryParameter("current", "temperature_2m")
+            .build()
+        val started = android.os.SystemClock.elapsedRealtime()
+        client.newCall(Request.Builder().url(url).get().build()).execute().use { response ->
+            if (!response.isSuccessful) error("Open-Meteo returned HTTP ${response.code}")
+        }
+        android.os.SystemClock.elapsedRealtime() - started
     }
 
     private fun doubleAt(array: JSONArray, index: Int): Double {

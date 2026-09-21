@@ -73,3 +73,13 @@ RTSP/MQTT are lazy, a persistent Java/Kotlin crash report is installed, and the 
 - MQTT publish exceptions are contained and reported instead of crashing HomePanel.
 - Initial Paho connection setup is de-duplicated to avoid double discovery/state bursts.
 - versionCode 16 / versionName 0.6.5.
+
+
+## v0.6.6 Home Assistant weather + network diagnostics
+
+- versionCode 17 / versionName 0.6.6.
+- Home Assistant weather entities are discovered with the existing `/api/states` request.
+- Current conditions come from `weather.*` state attributes.
+- Daily forecast uses `POST /api/services/weather/get_forecasts?return_response`.
+- Open-Meteo remains selectable as a direct Internet fallback.
+- Network diagnostics tests LAN, HA, HA weather, Open-Meteo, GitHub, MQTT TCP and local RTSP listener.

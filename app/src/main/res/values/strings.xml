@@ -3,7 +3,7 @@
     <string name="app_name">HomePanel</string>
     <string name="setup_title">Connect to Home Assistant</string>
     <string name="setup_subtitle">Enter your Home Assistant URL and a long-lived access token, then discover alarm and motion entities.</string>
-    <string name="system_locale_hint">Language, date, time zone and weather location follow this device automatically.</string>
+    <string name="system_locale_hint">Language, date and time zone follow this device automatically. Weather source is configurable.</string>
     <string name="ha_url">Home Assistant URL</string>
     <string name="access_token">Access token</string>
     <string name="discover_alarms">Discover devices</string>
@@ -181,4 +181,26 @@
     <string name="crash_detected_message">A crash was recorded on the previous run. Copy the report and send it for diagnosis.</string>
     <string name="crash_safe_mode_message">A startup crash was recorded. This launch is in Safe Mode: RTSP, MQTT, sensors and automatic update checks are temporarily disabled. Copy the report for diagnosis.</string>
     <string name="copy_crash_report">Copy crash report</string>
+
+    <string name="weather_settings_title">Weather source</string>
+    <string name="weather_settings_subtitle">Use a Home Assistant weather entity (recommended) or query Open-Meteo directly from the tablet.</string>
+    <string name="weather_source_ha">Home Assistant weather entity</string>
+    <string name="weather_source_ha_hint">Uses the existing Home Assistant connection. The tablet does not need direct Internet access for weather.</string>
+    <string name="weather_entity_manual">weather entity ID</string>
+    <string name="weather_entity_hint">Press Discover to list weather.* entities. Leave blank to use the first weather entity found.</string>
+    <string name="weather_entity_not_found">No weather.* entity was found in Home Assistant.</string>
+    <string name="weather_source_open_meteo">Open-Meteo (direct Internet)</string>
+    <string name="weather_source_open_meteo_hint">Uses api.open-meteo.com:443 and the Android device location.</string>
+    <string name="network_diagnostics_title">Network diagnostics</string>
+    <string name="network_diagnostics_subtitle">Test the paths HomePanel uses for LAN, Home Assistant, weather, GitHub updates, MQTT and the local RTSP listener.</string>
+    <string name="network_diagnostics_run">Run diagnostics</string>
+    <string name="network_diagnostics_running">Testing…</string>
+    <string name="network_diagnostics_lan">LAN / IPv4</string>
+    <string name="network_diagnostics_ha">Home Assistant</string>
+    <string name="network_diagnostics_weather">Weather source</string>
+    <string name="network_diagnostics_github">GitHub updates</string>
+    <string name="network_diagnostics_mqtt">MQTT broker</string>
+    <string name="network_diagnostics_rtsp">RTSP local listener</string>
+    <string name="network_diagnostics_weather_ha">Home Assistant weather</string>
+    <string name="network_diagnostics_open_meteo">Open-Meteo / Internet</string>
 </resources>

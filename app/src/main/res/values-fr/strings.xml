@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">HomePanel</string>
-    <string name="setup_title">Connexion à Home Assistant</string><string name="setup_subtitle">Saisissez l’URL de Home Assistant et un jeton longue durée, puis détectez les alarmes et capteurs de mouvement.</string><string name="system_locale_hint">La langue, la date, le fuseau horaire et la localisation météo suivent automatiquement cet appareil.</string>
+    <string name="setup_title">Connexion à Home Assistant</string><string name="setup_subtitle">Saisissez l’URL de Home Assistant et un jeton longue durée, puis détectez les alarmes et capteurs de mouvement.</string><string name="system_locale_hint">La langue, la date et le fuseau horaire suivent automatiquement cet appareil. La source météo est configurable.</string>
     <string name="ha_url">URL Home Assistant</string><string name="access_token">Jeton d’accès</string><string name="discover_alarms">Détecter les appareils</string><string name="discovering">Recherche...</string><string name="select_alarm">Sélectionner une alarme</string><string name="save_connect">Enregistrer et connecter</string><string name="no_alarms">Aucune entité alarm_control_panel trouvée.</string><string name="http_warning">Attention : HTTP transmet le jeton sans chiffrement de transport. Préférez HTTPS/WSS.</string>
     <string name="status_connecting">Connexion</string><string name="status_connected">Connecté</string><string name="status_disconnected">Déconnecté · toucher pour reconnecter</string><string name="status_error">Erreur · toucher pour reconnecter</string><string name="reconnect">Reconnecter</string><string name="settings">Réglages</string><string name="pin">PIN / code</string>
     <string name="disarm">Désarmer</string><string name="arm_home">Maison</string><string name="arm_away">Absent</string><string name="arm_night">Nuit</string><string name="arm_vacation">Vacances</string><string name="arm_custom">Personnalisé</string>
@@ -122,4 +122,26 @@
     <string name="crash_detected_message">Un plantage a été enregistré lors de l’exécution précédente. Copiez le rapport pour le diagnostic.</string>
     <string name="crash_safe_mode_message">Un plantage a été enregistré au démarrage. Ce lancement utilise le mode sans échec : RTSP, MQTT, les capteurs et la vérification automatique des mises à jour sont temporairement désactivés. Copiez le rapport pour le diagnostic.</string>
     <string name="copy_crash_report">Copier le rapport de plantage</string>
+
+    <string name="weather_settings_title">Source météo</string>
+    <string name="weather_settings_subtitle">Utilisez une entité weather de Home Assistant (recommandé) ou interrogez Open-Meteo directement depuis la tablette.</string>
+    <string name="weather_source_ha">Entité weather de Home Assistant</string>
+    <string name="weather_source_ha_hint">Utilise la connexion Home Assistant existante. La tablette n’a pas besoin d’un accès Internet direct pour la météo.</string>
+    <string name="weather_entity_manual">ID de l’entité weather</string>
+    <string name="weather_entity_hint">Appuyez sur Découvrir pour lister les entités weather.*. Laissez vide pour utiliser la première entité trouvée.</string>
+    <string name="weather_entity_not_found">Aucune entité weather.* trouvée dans Home Assistant.</string>
+    <string name="weather_source_open_meteo">Open-Meteo (Internet direct)</string>
+    <string name="weather_source_open_meteo_hint">Utilise api.open-meteo.com:443 et la localisation Android de l’appareil.</string>
+    <string name="network_diagnostics_title">Diagnostic réseau</string>
+    <string name="network_diagnostics_subtitle">Teste les chemins utilisés par HomePanel pour le LAN, Home Assistant, la météo, GitHub, MQTT et le listener RTSP local.</string>
+    <string name="network_diagnostics_run">Lancer le diagnostic</string>
+    <string name="network_diagnostics_running">Test en cours…</string>
+    <string name="network_diagnostics_lan">LAN / IPv4</string>
+    <string name="network_diagnostics_ha">Home Assistant</string>
+    <string name="network_diagnostics_weather">Source météo</string>
+    <string name="network_diagnostics_github">Mises à jour GitHub</string>
+    <string name="network_diagnostics_mqtt">Broker MQTT</string>
+    <string name="network_diagnostics_rtsp">Listener RTSP local</string>
+    <string name="network_diagnostics_weather_ha">Météo Home Assistant</string>
+    <string name="network_diagnostics_open_meteo">Open-Meteo / Internet</string>
 </resources>

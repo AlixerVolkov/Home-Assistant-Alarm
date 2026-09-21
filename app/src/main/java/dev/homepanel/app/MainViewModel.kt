@@ -22,8 +22,12 @@ import dev.homepanel.app.network.DeviceLocationResolver
 import dev.homepanel.app.network.GuestWifiSummary
 import dev.homepanel.app.network.HomeAssistantRestClient
 import dev.homepanel.app.network.HouseSummary
+import dev.homepanel.app.network.NetworkDiagnosticItem
+import dev.homepanel.app.network.NetworkDiagnosticsClient
+import dev.homepanel.app.network.NetworkDiagnosticsState
 import dev.homepanel.app.network.HomeAssistantWebSocket
 import dev.homepanel.app.network.WakeSensorSummary
+import dev.homepanel.app.network.WeatherEntitySummary
 import dev.homepanel.app.network.WeatherClient
 import dev.homepanel.app.network.WeatherForecast
 import dev.homepanel.app.network.UpdateClient
@@ -47,6 +51,7 @@ data class DiscoveryState(
     val alarms: List<AlarmEntitySummary> = emptyList(),
     val wakeSensors: List<WakeSensorSummary> = emptyList(),
     val guestWifi: List<GuestWifiSummary> = emptyList(),
+    val weatherEntities: List<WeatherEntitySummary> = emptyList(),
     val errorMessage: String? = null
 )
 
@@ -101,6 +106,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val restClient = HomeAssistantRestClient(httpClient)
     private val socketClient = HomeAssistantWebSocket(httpClient)
     private val weatherClient = WeatherClient(httpClient)
+    private val networkDiagnosticsClient = NetworkDiagnosticsClient(application, httpClient, restClient, weatherClient)
     private val locationResolver = DeviceLocationResolver(application)
     private val telemetryReader = DeviceTelemetryReader(application)
     private val historyRepository = EventHistoryRepository(application)
@@ -145,6 +151,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val _update = MutableStateFlow(UpdateUiState())
     val update: StateFlow<UpdateUiState> = _update.asStateFlow()
 
+    private val _networkDiagnostics = MutableStateFlow(NetworkDiagnosticsState())
+    val networkDiagnostics: StateFlow<NetworkDiagnosticsState> = _networkDiagnostics.asStateFlow()
+
     private val _ambientLux = MutableStateFlow<Float?>(null)
     val ambientLux: StateFlow<Float?> = _ambientLux.asStateFlow()
 
@@ -180,6 +189,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 if (current != null && !_editing.value) {
                     connect(current)
                     loadHouseSummary(showSpinner = _houseSummary.value.summary == null)
+                    if (current.weatherSource == WEATHER_SOURCE_HOME_ASSISTANT) {
+                        viewModelScope.launch { loadWeather(showSpinner = _weather.value.forecast == null) }
+                    }
                     if (!safeMode && current.updateChecksEnabled &&
                         (lastAutomaticUpdateCheckElapsed == 0L ||
                             SystemClock.elapsedRealtime() - lastAutomaticUpdateCheckElapsed > UPDATE_CHECK_INTERVAL_MS)
@@ -219,7 +231,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
         viewModelScope.launch {
             while (isActive) {
-                if (_location.value.location != null) {
+                val current = _settings.value
+                if (current?.weatherSource == WEATHER_SOURCE_HOME_ASSISTANT || _location.value.location != null) {
                     loadWeather(showSpinner = _weather.value.forecast == null)
                 }
                 delay(WEATHER_REFRESH_INTERVAL_MS)
@@ -448,7 +461,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                         hasRun = true,
                         alarms = result.alarms,
                         wakeSensors = result.wakeSensors,
-                        guestWifi = result.guestWifi
+                        guestWifi = result.guestWifi,
+                        weatherEntities = result.weatherEntities
                     )
                 }
                 .onFailure { error ->
@@ -475,6 +489,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             screensaverTimeoutMinutes = normalizedSaver,
             sleepTimeoutMinutes = normalizedSleep,
             settingsPin = draft.settingsPin.trim().filter(Char::isDigit).take(8),
+            weatherSource = draft.weatherSource.takeIf {
+                it == WEATHER_SOURCE_HOME_ASSISTANT || it == WEATHER_SOURCE_OPEN_METEO
+            } ?: WEATHER_SOURCE_HOME_ASSISTANT,
+            weatherEntityId = draft.weatherEntityId?.trim()?.takeIf { it.isNotBlank() },
             rtspPort = draft.rtspPort.coerceIn(1024, 65535),
             rtspAdvertisedHost = draft.rtspAdvertisedHost.trim()
                 .removePrefix("rtsp://")
@@ -578,11 +596,40 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun refreshWeather() {
         userActivity()
+        val current = _settings.value ?: return
         viewModelScope.launch {
-            if (_location.value.location == null) {
+            if (current.weatherSource == WEATHER_SOURCE_HOME_ASSISTANT) {
+                loadWeather(showSpinner = _weather.value.forecast == null)
+            } else if (_location.value.location == null) {
                 refreshDeviceLocation()
             } else {
                 loadWeather(showSpinner = _weather.value.forecast == null)
+            }
+        }
+    }
+
+    fun usesDeviceLocationForWeather(): Boolean =
+        _settings.value?.weatherSource != WEATHER_SOURCE_HOME_ASSISTANT
+
+    fun runNetworkDiagnostics(draft: PanelSettings) {
+        if (_networkDiagnostics.value.isRunning) return
+        viewModelScope.launch {
+            val items = mutableListOf<NetworkDiagnosticItem>()
+            _networkDiagnostics.value = NetworkDiagnosticsState(isRunning = true, items = emptyList())
+            try {
+                networkDiagnosticsClient.run(draft) { item ->
+                    items.removeAll { it.key == item.key }
+                    items += item
+                    _networkDiagnostics.value = NetworkDiagnosticsState(isRunning = true, items = items.toList())
+                }
+            } catch (error: Throwable) {
+                items += NetworkDiagnosticItem(
+                    key = "lan",
+                    status = dev.homepanel.app.network.DiagnosticStatus.FAILED,
+                    detail = "Diagnostics failed: ${error.javaClass.simpleName}: ${error.message.orEmpty()}"
+                )
+            } finally {
+                _networkDiagnostics.value = NetworkDiagnosticsState(isRunning = false, items = items.toList())
             }
         }
     }
@@ -681,12 +728,38 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     private suspend fun loadWeather(showSpinner: Boolean) {
-        val currentLocation = _location.value.location ?: return
+        val current = _settings.value ?: return
+        if (_weather.value.isLoading) return
         if (showSpinner) {
             _weather.value = _weather.value.copy(isLoading = true, errorMessage = null)
+        } else {
+            _weather.value = _weather.value.copy(isLoading = true)
         }
 
-        runCatching { weatherClient.fetchForecast(currentLocation) }
+        val request: suspend () -> WeatherForecast = when (current.weatherSource) {
+            WEATHER_SOURCE_HOME_ASSISTANT -> {
+                {
+                    restClient.fetchWeatherForecast(
+                        current.baseUrl,
+                        current.accessToken,
+                        current.weatherEntityId
+                    )
+                }
+            }
+            else -> {
+                val currentLocation = _location.value.location
+                if (currentLocation == null) {
+                    _weather.value = _weather.value.copy(
+                        isLoading = false,
+                        errorMessage = "Device location is required for Open-Meteo"
+                    )
+                    return
+                }
+                { weatherClient.fetchForecast(currentLocation) }
+            }
+        }
+
+        runCatching { request() }
             .onSuccess { forecast ->
                 _weather.value = WeatherUiState(isLoading = false, forecast = forecast)
             }
@@ -807,6 +880,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     companion object {
+        const val WEATHER_SOURCE_HOME_ASSISTANT = "home_assistant"
+        const val WEATHER_SOURCE_OPEN_METEO = "open_meteo"
         private const val WEATHER_REFRESH_INTERVAL_MS = 30L * 60L * 1000L
         private const val HOUSE_SUMMARY_REFRESH_INTERVAL_MS = 20_000L
         private const val UPDATE_CHECK_INTERVAL_MS = 6L * 60L * 60L * 1000L

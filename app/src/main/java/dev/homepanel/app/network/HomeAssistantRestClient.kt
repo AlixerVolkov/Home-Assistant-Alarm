@@ -4,9 +4,12 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.HttpUrl
 import okhttp3.OkHttpClient
+import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.Request
+import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONArray
 import org.json.JSONObject
+import java.time.ZoneId
 
 class HomeAssistantRestClient(
     private val client: OkHttpClient
@@ -35,6 +38,7 @@ class HomeAssistantRestClient(
 
             val alarms = mutableListOf<AlarmEntitySummary>()
             val wakeSensors = mutableListOf<WakeSensorSummary>()
+            val weatherEntities = mutableListOf<WeatherEntitySummary>()
 
             stateByEntityId.forEach { (entityId, item) ->
                 val attributes = item.optJSONObject("attributes")
@@ -49,6 +53,14 @@ class HomeAssistantRestClient(
                         codeArmRequired = attributes?.optBoolean("code_arm_required", true) ?: true,
                         codeFormat = attributes?.optString("code_format")
                             ?.takeIf { it.isNotBlank() && it != "null" }
+                    )
+                }
+
+                if (entityId.startsWith("weather.")) {
+                    weatherEntities += WeatherEntitySummary(
+                        entityId = entityId,
+                        friendlyName = friendlyName,
+                        condition = item.optString("state", "unknown")
                     )
                 }
 
@@ -95,7 +107,8 @@ class HomeAssistantRestClient(
             PanelDiscoveryResult(
                 alarms = alarms.sortedBy { it.friendlyName.lowercase() },
                 wakeSensors = wakeSensors.sortedBy { it.friendlyName.lowercase() },
-                guestWifi = guestWifi
+                guestWifi = guestWifi,
+                weatherEntities = weatherEntities.sortedBy { it.friendlyName.lowercase() }
             )
         }
     }
@@ -175,6 +188,154 @@ class HomeAssistantRestClient(
         }
     }
 
+    suspend fun fetchWeatherForecast(
+        baseUrl: String,
+        accessToken: String,
+        requestedEntityId: String?
+    ): WeatherForecast = withContext(Dispatchers.IO) {
+        val entityId = requestedEntityId?.trim()?.takeIf { it.isNotBlank() }
+            ?: findFirstWeatherEntityId(baseUrl, accessToken)
+            ?: error("No weather.* entity found in Home Assistant")
+
+        val stateRequest = authenticatedRequest(
+            url = HomeAssistantUrl.restUrl(baseUrl, "api/states/$entityId"),
+            accessToken = accessToken
+        ).get().build()
+
+        val stateJson = client.newCall(stateRequest).execute().use { response ->
+            if (!response.isSuccessful) error("Home Assistant weather state returned HTTP ${response.code}")
+            JSONObject(response.body.string())
+        }
+
+        val attributes = stateJson.optJSONObject("attributes") ?: JSONObject()
+        val friendly = friendlyName(entityId, attributes)
+        val temperatureUnit = attributes.optString("temperature_unit", "°C")
+        val windUnit = attributes.optString("wind_speed_unit", "km/h")
+        val currentTemperatureRaw = attributes.optDoubleOrNull("temperature")
+            ?: error("$entityId has no current temperature")
+        val currentTemperature = convertTemperatureToC(currentTemperatureRaw, temperatureUnit)
+        val apparent = convertTemperatureToC(
+            attributes.optDoubleOrNull("apparent_temperature") ?: currentTemperatureRaw,
+            temperatureUnit
+        )
+        val wind = convertWindToKmh(attributes.optDoubleOrNull("wind_speed") ?: 0.0, windUnit)
+        val condition = stateJson.optString("state", "cloudy")
+
+        val serviceUrl = HomeAssistantUrl.restUrl(baseUrl, "api/services/weather/get_forecasts")
+            .newBuilder()
+            .addQueryParameter("return_response", null)
+            .build()
+        val body = JSONObject()
+            .put("entity_id", entityId)
+            .put("type", "daily")
+            .toString()
+            .toRequestBody(JSON_MEDIA_TYPE)
+        val forecastRequest = authenticatedRequest(serviceUrl, accessToken)
+            .post(body)
+            .build()
+
+        val responseJson = client.newCall(forecastRequest).execute().use { response ->
+            if (!response.isSuccessful) {
+                error("Home Assistant weather.get_forecasts returned HTTP ${response.code}")
+            }
+            JSONObject(response.body.string())
+        }
+        val serviceResponse = responseJson.optJSONObject("service_response") ?: JSONObject()
+        val entityResponse = serviceResponse.optJSONObject(entityId)
+            ?: error("Home Assistant returned no forecast for $entityId")
+        val forecastArray = entityResponse.optJSONArray("forecast") ?: JSONArray()
+
+        val days = buildList {
+            val count = minOf(5, forecastArray.length())
+            for (index in 0 until count) {
+                val item = forecastArray.optJSONObject(index) ?: continue
+                val highRaw = item.optDoubleOrNull("temperature") ?: 0.0
+                val lowRaw = item.optDoubleOrNull("templow")
+                    ?: item.optDoubleOrNull("temperature_low")
+                    ?: highRaw
+                val date = item.optString("datetime").take(10).ifBlank {
+                    java.time.LocalDate.now().plusDays(index.toLong()).toString()
+                }
+                add(
+                    DailyForecast(
+                        date = date,
+                        weatherCode = conditionToWeatherCode(item.optString("condition", condition)),
+                        minimumC = convertTemperatureToC(lowRaw, temperatureUnit),
+                        maximumC = convertTemperatureToC(highRaw, temperatureUnit),
+                        precipitationProbability = item.optDoubleOrNull("precipitation_probability")?.toInt() ?: 0
+                    )
+                )
+            }
+        }
+
+        WeatherForecast(
+            current = CurrentWeather(
+                temperatureC = currentTemperature,
+                apparentTemperatureC = apparent,
+                weatherCode = conditionToWeatherCode(condition),
+                windSpeedKmh = wind
+            ),
+            daily = days,
+            locationLabel = friendly,
+            timezoneId = ZoneId.systemDefault().id,
+            sourceLabel = "Home Assistant · $entityId"
+        )
+    }
+
+    suspend fun probeHomeAssistant(baseUrl: String, accessToken: String): Long = withContext(Dispatchers.IO) {
+        val started = android.os.SystemClock.elapsedRealtime()
+        val request = authenticatedRequest(HomeAssistantUrl.restUrl(baseUrl, "api/"), accessToken).get().build()
+        client.newCall(request).execute().use { response ->
+            if (!response.isSuccessful) error("Home Assistant returned HTTP ${response.code}")
+        }
+        android.os.SystemClock.elapsedRealtime() - started
+    }
+
+    private fun findFirstWeatherEntityId(baseUrl: String, accessToken: String): String? {
+        val request = authenticatedRequest(HomeAssistantUrl.restUrl(baseUrl, "api/states"), accessToken).get().build()
+        return client.newCall(request).execute().use { response ->
+            if (!response.isSuccessful) error("Home Assistant returned HTTP ${response.code}")
+            val states = JSONArray(response.body.string())
+            buildList {
+                for (index in 0 until states.length()) {
+                    val entityId = states.optJSONObject(index)?.optString("entity_id").orEmpty()
+                    if (entityId.startsWith("weather.")) add(entityId)
+                }
+            }.sorted().firstOrNull()
+        }
+    }
+
+    private fun JSONObject.optDoubleOrNull(name: String): Double? {
+        if (!has(name) || isNull(name)) return null
+        return opt(name)?.toString()?.replace(',', '.')?.toDoubleOrNull()
+    }
+
+    private fun convertTemperatureToC(value: Double, unit: String): Double =
+        if (unit.contains("F", ignoreCase = true)) (value - 32.0) * 5.0 / 9.0 else value
+
+    private fun convertWindToKmh(value: Double, unit: String): Double = when (unit.lowercase()) {
+        "mph", "mi/h" -> value * 1.609344
+        "m/s" -> value * 3.6
+        "kn", "kt", "kts" -> value * 1.852
+        "ft/s" -> value * 1.09728
+        "bft", "beaufort" -> if (value <= 0) 0.0 else 3.01 * Math.pow(value, 1.5)
+        else -> value
+    }
+
+    private fun conditionToWeatherCode(condition: String): Int = when (condition.lowercase()) {
+        "sunny", "clear-night" -> 0
+        "partlycloudy" -> 2
+        "cloudy", "windy", "windy-variant", "exceptional" -> 3
+        "fog" -> 45
+        "rainy" -> 61
+        "pouring" -> 82
+        "snowy" -> 71
+        "snowy-rainy" -> 67
+        "hail" -> 96
+        "lightning", "lightning-rainy" -> 95
+        else -> 3
+    }
+
     suspend fun fetchImage(
         baseUrl: String,
         accessToken: String,
@@ -209,6 +370,7 @@ class HomeAssistantRestClient(
             ?: entityId.substringAfter('.').replace('_', ' ')
 
     companion object {
+        private val JSON_MEDIA_TYPE = "application/json; charset=utf-8".toMediaType()
         private val WAKE_DEVICE_CLASSES = setOf("motion", "occupancy", "presence")
         private val EXCLUDED_TEMPERATURE_HINTS = setOf(
             "battery", "cpu", "processor", "tablet", "phone", "device temperature", "gpu", "ssd"
