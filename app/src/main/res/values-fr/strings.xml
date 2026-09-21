@@ -133,7 +133,7 @@
     <string name="weather_source_open_meteo">Open-Meteo (Internet direct)</string>
     <string name="weather_source_open_meteo_hint">Utilise api.open-meteo.com:443 et la localisation Android de l’appareil.</string>
     <string name="network_diagnostics_title">Diagnostic réseau</string>
-    <string name="network_diagnostics_subtitle">Teste les chemins utilisés par HomePanel pour le LAN, Home Assistant, la météo, GitHub, MQTT et le listener RTSP local.</string>
+    <string name="network_diagnostics_subtitle">Teste les chemins utilisés par HomePanel pour le LAN, Home Assistant, la météo, OpenStreetMap, GitHub, MQTT et le listener RTSP local.</string>
     <string name="network_diagnostics_run">Lancer le diagnostic</string>
     <string name="network_diagnostics_running">Test en cours…</string>
     <string name="network_diagnostics_lan">LAN / IPv4</string>
@@ -154,4 +154,15 @@
     <string name="people_map_no_coordinates">Home Assistant ne fournit actuellement aucune coordonnée pour ces personnes. Leur zone/état reste affiché ci-dessous.</string>
     <string name="forecast_title">Prévisions sur 5 jours</string>
     <string name="today">Aujourd’hui</string>
+
+    <string name="people_map_osm">OpenStreetMap</string>
+    <string name="people_map_offline">Hors ligne</string>
+    <string name="people_map_osm_hint">Fond de carte réel OpenStreetMap. Nécessite un accès HTTPS à tile.openstreetmap.org:443. Si les tuiles ne chargent pas, passez en mode hors ligne.</string>
+    <string name="people_map_osm_unavailable">OpenStreetMap indisponible\nAutorisez tile.openstreetmap.org:443 ou utilisez la carte hors ligne.</string>
+    <string name="weather_warning_expires">Jusqu’au : %1$s</string>
+    <string name="weather_warning_context_title">Alerte météo</string>
+    <string name="weather_warning_context_subtitle">%1$d alerte(s) active(s)</string>
+    <string name="weather_warning_context_hint">HomePanel a réveillé écran car Home Assistant signale une alerte météo active. Fermer cette vue ne supprime pas alerte.</string>
+    <string name="network_diagnostics_osm">Tuiles OpenStreetMap</string>
+
 </resources>

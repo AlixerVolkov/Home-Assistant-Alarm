@@ -192,7 +192,7 @@
     <string name="weather_source_open_meteo">Open-Meteo (direct Internet)</string>
     <string name="weather_source_open_meteo_hint">Uses api.open-meteo.com:443 and the Android device location.</string>
     <string name="network_diagnostics_title">Network diagnostics</string>
-    <string name="network_diagnostics_subtitle">Test the paths HomePanel uses for LAN, Home Assistant, weather, GitHub updates, MQTT and the local RTSP listener.</string>
+    <string name="network_diagnostics_subtitle">Test the paths HomePanel uses for LAN, Home Assistant, weather, OpenStreetMap, GitHub updates, MQTT and the local RTSP listener.</string>
     <string name="network_diagnostics_run">Run diagnostics</string>
     <string name="network_diagnostics_running">Testing…</string>
     <string name="network_diagnostics_lan">LAN / IPv4</string>
@@ -213,4 +213,15 @@
     <string name="people_map_no_coordinates">Home Assistant is not currently exposing coordinates for these people. Their zone/state is still shown below.</string>
     <string name="forecast_title">5-day forecast</string>
     <string name="today">Today</string>
+
+    <string name="people_map_osm">OpenStreetMap</string>
+    <string name="people_map_offline">Offline</string>
+    <string name="people_map_osm_hint">Real OpenStreetMap background. Requires HTTPS access to tile.openstreetmap.org:443. If tiles cannot load, switch to Offline.</string>
+    <string name="people_map_osm_unavailable">OpenStreetMap unavailable\nAllow tile.openstreetmap.org:443 or use Offline map.</string>
+    <string name="weather_warning_expires">Until: %1$s</string>
+    <string name="weather_warning_context_title">Weather alert</string>
+    <string name="weather_warning_context_subtitle">%1$d active warning(s)</string>
+    <string name="weather_warning_context_hint">HomePanel woke the display because Home Assistant reports an active weather warning. Closing this view does not clear the warning.</string>
+    <string name="network_diagnostics_osm">OpenStreetMap tiles</string>
+
 </resources>

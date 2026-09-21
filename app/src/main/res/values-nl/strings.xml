@@ -138,7 +138,7 @@
     <string name="weather_source_open_meteo">Open-Meteo (direct internet)</string>
     <string name="weather_source_open_meteo_hint">Gebruikt api.open-meteo.com:443 en de Android-locatie van het apparaat.</string>
     <string name="network_diagnostics_title">Netwerkdiagnose</string>
-    <string name="network_diagnostics_subtitle">Test de paden die HomePanel gebruikt voor LAN, Home Assistant, weer, GitHub-updates, MQTT en de lokale RTSP-listener.</string>
+    <string name="network_diagnostics_subtitle">Test de paden die HomePanel gebruikt voor LAN, Home Assistant, weer, OpenStreetMap, GitHub-updates, MQTT en de lokale RTSP-listener.</string>
     <string name="network_diagnostics_run">Diagnose uitvoeren</string>
     <string name="network_diagnostics_running">Bezig met testen…</string>
     <string name="network_diagnostics_lan">LAN / IPv4</string>
@@ -159,4 +159,15 @@
     <string name="people_map_no_coordinates">Home Assistant geeft momenteel geen coördinaten voor deze personen door. Hun zone/status staat hieronder.</string>
     <string name="forecast_title">5-daagse verwachting</string>
     <string name="today">Vandaag</string>
+
+    <string name="people_map_osm">OpenStreetMap</string>
+    <string name="people_map_offline">Offline</string>
+    <string name="people_map_osm_hint">Echte kaartachtergrond van OpenStreetMap. Vereist HTTPS-toegang tot tile.openstreetmap.org:443. Schakel naar Offline als de kaarttegels niet laden.</string>
+    <string name="people_map_osm_unavailable">OpenStreetMap niet beschikbaar\nSta tile.openstreetmap.org:443 toe of gebruik de Offline-kaart.</string>
+    <string name="weather_warning_expires">Tot: %1$s</string>
+    <string name="weather_warning_context_title">Weeralarm</string>
+    <string name="weather_warning_context_subtitle">%1$d actieve waarschuwing(en)</string>
+    <string name="weather_warning_context_hint">HomePanel heeft het scherm gewekt omdat Home Assistant een actieve weerwaarschuwing meldt. Deze weergave sluiten wist de waarschuwing niet.</string>
+    <string name="network_diagnostics_osm">OpenStreetMap-kaarttegels</string>
+
 </resources>

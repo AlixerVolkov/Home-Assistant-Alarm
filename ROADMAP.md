@@ -1,6 +1,6 @@
 # HomePanel roadmap
 
-## Implementado hasta v0.6.0
+## Implementado hasta v0.6.8
 
 - Home Assistant WebSocket + Alarmo.
 - PIN y estados de alarma con acciones protegidas contra transiciones redundantes.
@@ -15,6 +15,8 @@
 - Historial persistente.
 - Kiosk inmersivo + PIN de configuracion.
 - Actualizacion desde GitHub Releases + workflow de publicacion.
+- Weather de Home Assistant, forecast mejorado y avisos meteorologicos contextuales.
+- Mapa de personas con OpenStreetMap opcional y fallback offline.
 
 ## Siguientes candidatos
 

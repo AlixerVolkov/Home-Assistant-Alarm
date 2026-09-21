@@ -113,6 +113,16 @@ fun AlarmScreen(
     var showGuestWifi by remember { mutableStateOf(false) }
     var showHistory by remember { mutableStateOf(false) }
     var showPeopleMap by remember { mutableStateOf(false) }
+    var showWeatherAlert by remember { mutableStateOf(false) }
+
+    val activeWeatherWarnings = houseSummaryState.summary?.weatherWarnings.orEmpty().filter { it.active }
+    val activeWeatherWarningKey = activeWeatherWarnings.joinToString("|") { warning ->
+        "${warning.entityId}:${warning.severity.orEmpty()}:${warning.expiresAt.orEmpty()}"
+    }
+
+    LaunchedEffect(activeWeatherWarningKey) {
+        if (activeWeatherWarningKey.isNotBlank()) showWeatherAlert = true
+    }
 
     LaunchedEffect(showGuestWifi) {
         if (showGuestWifi) onRefreshGuestQr()
@@ -264,6 +274,13 @@ fun AlarmScreen(
         )
     }
 
+    if (showWeatherAlert && activeWeatherWarnings.isNotEmpty()) {
+        WeatherWarningDialog(
+            warnings = activeWeatherWarnings,
+            onDismiss = { showWeatherAlert = false }
+        )
+    }
+
     pinAction?.let { action ->
         PinDialog(
             action = action,
@@ -350,6 +367,13 @@ private fun WeatherWarningsBanner(warnings: List<WeatherWarning>) {
                     warning.description?.let {
                         Text(it, style = MaterialTheme.typography.bodySmall)
                     }
+                    warning.expiresAt?.let { expires ->
+                        Text(
+                            stringResource(R.string.weather_warning_expires, formatWarningTime(expires)),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onErrorContainer
+                        )
+                    }
                 }
             }
             if (active.size > 3) {
@@ -359,6 +383,110 @@ private fun WeatherWarningsBanner(warnings: List<WeatherWarning>) {
                 )
             }
         }
+    }
+}
+
+@Composable
+private fun WeatherWarningDialog(
+    warnings: List<WeatherWarning>,
+    onDismiss: () -> Unit
+) {
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(usePlatformDefaultWidth = false)
+    ) {
+        Surface(
+            modifier = Modifier.fillMaxWidth(0.92f).fillMaxHeight(0.82f),
+            color = MaterialTheme.colorScheme.errorContainer,
+            shape = MaterialTheme.shapes.extraLarge,
+            tonalElevation = 8.dp
+        ) {
+            Column(
+                modifier = Modifier.fillMaxSize().padding(22.dp),
+                verticalArrangement = Arrangement.spacedBy(14.dp)
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("⚠️", style = MaterialTheme.typography.displaySmall)
+                    Column(modifier = Modifier.weight(1f).padding(start = 12.dp)) {
+                        Text(
+                            stringResource(R.string.weather_warning_context_title),
+                            style = MaterialTheme.typography.headlineMedium,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Text(
+                            stringResource(R.string.weather_warning_context_subtitle, warnings.size),
+                            style = MaterialTheme.typography.bodyMedium
+                        )
+                    }
+                    TextButton(onClick = onDismiss) { Text(stringResource(R.string.close)) }
+                }
+
+                Column(
+                    modifier = Modifier.weight(1f).verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    warnings.forEach { warning ->
+                        Card(
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = CardDefaults.cardColors(
+                                containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.92f)
+                            )
+                        ) {
+                            Column(
+                                modifier = Modifier.padding(16.dp),
+                                verticalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                Text(
+                                    warning.title ?: warning.friendlyName,
+                                    style = MaterialTheme.typography.titleLarge,
+                                    fontWeight = FontWeight.Bold
+                                )
+                                warning.severity?.let { severity ->
+                                    Text(
+                                        stringResource(R.string.weather_warning_severity, severity),
+                                        style = MaterialTheme.typography.titleSmall,
+                                        color = MaterialTheme.colorScheme.error
+                                    )
+                                }
+                                warning.expiresAt?.let { expires ->
+                                    Text(
+                                        stringResource(R.string.weather_warning_expires, formatWarningTime(expires)),
+                                        style = MaterialTheme.typography.bodyMedium
+                                    )
+                                }
+                                warning.description?.let { description ->
+                                    Text(description, style = MaterialTheme.typography.bodyMedium)
+                                }
+                                Text(
+                                    warning.entityId,
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
+                    }
+                }
+
+                Text(
+                    stringResource(R.string.weather_warning_context_hint),
+                    style = MaterialTheme.typography.bodySmall
+                )
+            }
+        }
+    }
+}
+
+private fun formatWarningTime(value: String): String {
+    val trimmed = value.trim()
+    if (trimmed.isBlank()) return value
+    return runCatching {
+        Instant.parse(trimmed).atZone(ZoneId.systemDefault())
+            .format(DateTimeFormatter.ofPattern("dd/MM HH:mm"))
+    }.getOrElse {
+        runCatching {
+            LocalDateTime.parse(trimmed).atZone(ZoneId.systemDefault())
+                .format(DateTimeFormatter.ofPattern("dd/MM HH:mm"))
+        }.getOrDefault(trimmed)
     }
 }
 
@@ -421,6 +549,7 @@ private fun PersonsMapDialog(
     onDismiss: () -> Unit
 ) {
     val located = persons.filter { it.latitude != null && it.longitude != null }
+    var useOsmMap by remember { mutableStateOf(true) }
     val occupiedStates = persons.map { it.state.lowercase() }.toSet()
     val relevantZones = zones.filter { zone ->
         zone.entityId == "zone.home" ||
@@ -443,8 +572,30 @@ private fun PersonsMapDialog(
                     Spacer(Modifier.weight(1f))
                     TextButton(onClick = onDismiss) { Text(stringResource(R.string.close)) }
                 }
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    if (useOsmMap) {
+                        FilledTonalButton(onClick = { useOsmMap = true }) {
+                            Text(stringResource(R.string.people_map_osm))
+                        }
+                        OutlinedButton(onClick = { useOsmMap = false }) {
+                            Text(stringResource(R.string.people_map_offline))
+                        }
+                    } else {
+                        OutlinedButton(onClick = { useOsmMap = true }) {
+                            Text(stringResource(R.string.people_map_osm))
+                        }
+                        FilledTonalButton(onClick = { useOsmMap = false }) {
+                            Text(stringResource(R.string.people_map_offline))
+                        }
+                    }
+                    Spacer(Modifier.weight(1f))
+                }
                 Text(
-                    stringResource(R.string.people_map_offline_hint),
+                    stringResource(if (useOsmMap) R.string.people_map_osm_hint else R.string.people_map_offline_hint),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -461,11 +612,21 @@ private fun PersonsMapDialog(
                         }
                     }
                 } else {
-                    OfflinePeopleMap(
-                        persons = located,
-                        zones = relevantZones,
-                        modifier = Modifier.fillMaxWidth().weight(1f)
-                    )
+                    if (useOsmMap) {
+                        Card(modifier = Modifier.fillMaxWidth().weight(1f)) {
+                            OsmPeopleMap(
+                                persons = located,
+                                zones = relevantZones,
+                                modifier = Modifier.fillMaxSize()
+                            )
+                        }
+                    } else {
+                        OfflinePeopleMap(
+                            persons = located,
+                            zones = relevantZones,
+                            modifier = Modifier.fillMaxWidth().weight(1f)
+                        )
+                    }
                 }
 
                 Column(
@@ -601,6 +762,7 @@ private fun historyIcon(kind: String): String = when (kind) {
     "guest" -> "📶"
     "connection" -> "🔗"
     "update" -> "⬆️"
+    "weather" -> "⚠️"
     else -> "•"
 }
 

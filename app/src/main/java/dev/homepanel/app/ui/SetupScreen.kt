@@ -974,6 +974,7 @@ private fun diagnosticLabel(key: String): String = when (key) {
     "home_assistant" -> stringResource(R.string.network_diagnostics_ha)
     "weather_ha" -> stringResource(R.string.network_diagnostics_weather_ha)
     "open_meteo" -> stringResource(R.string.network_diagnostics_open_meteo)
+    "osm" -> stringResource(R.string.network_diagnostics_osm)
     "github" -> stringResource(R.string.network_diagnostics_github)
     "mqtt" -> stringResource(R.string.network_diagnostics_mqtt)
     "rtsp" -> stringResource(R.string.network_diagnostics_rtsp)

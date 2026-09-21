@@ -1,4 +1,12 @@
-# HomePanel v0.6.7
+# HomePanel v0.6.8
+
+## v0.6.8: mapa OpenStreetMap + modo contextual de avisos
+
+- El mapa de personas tiene ahora fondo real opcional de OpenStreetMap, con zoom, zonas de Home Assistant y fallback manual al mapa offline.
+- Los tiles se solicitan solo para la vista actual, con cache HTTP y atribucion visible de OpenStreetMap.
+- El diagnostico de red prueba tambien `tile.openstreetmap.org:443`.
+- Los avisos meteorologicos activos despiertan la pantalla, abren una vista contextual y muestran tipo, severidad, descripcion y expiracion cuando estan disponibles.
+- Los avisos nuevos y su limpieza se registran en el historial.
 
 ## v0.6.7: avisos meteorológicos + mapa de personas + forecast mejorado
 
@@ -98,7 +106,7 @@ La app consulta el ultimo **GitHub Release** de este repositorio. Para que exist
 Hay dos workflows:
 
 - **Build signed Android APK**: compila y deja un artifact de GitHub Actions.
-- **Publish HomePanel Release**: compila el mismo APK firmado y crea/actualiza `v0.6.0` en GitHub Releases con `HomePanel-v0.6.0.apk`.
+- **Publish HomePanel Release**: compila el mismo APK firmado y crea/actualiza la release de la version actual en GitHub Releases con su APK firmado.
 
 Ejecuta `Publish HomePanel Release` manualmente desde Actions cuando quieras distribuir una version.
 
@@ -115,8 +123,8 @@ versionCode creciente
 Version actual:
 
 ```text
-versionCode = 11
-versionName = 0.6.0
+versionCode = 19
+versionName = 0.6.8
 ```
 
 ## Kiosk

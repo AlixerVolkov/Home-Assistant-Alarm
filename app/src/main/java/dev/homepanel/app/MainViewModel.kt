@@ -177,6 +177,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private var localProximityNear: Boolean? = null
     private var mqttForcedSleep = false
     private var lastAutomaticUpdateCheckElapsed = 0L
+    private var lastActiveWeatherWarningIds: Set<String> = emptySet()
 
     init {
         viewModelScope.launch {
@@ -716,6 +717,22 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             )
             runCatching { restClient.fetchHouseSummary(current.baseUrl, current.accessToken) }
                 .onSuccess { summary ->
+                    val activeWarnings = summary.weatherWarnings.filter { it.active }
+                    val activeIds = activeWarnings.mapTo(linkedSetOf()) { it.entityId }
+                    val newlyActive = activeIds - lastActiveWeatherWarningIds
+                    val cleared = lastActiveWeatherWarningIds - activeIds
+
+                    if (newlyActive.isNotEmpty()) {
+                        val names = activeWarnings
+                            .filter { it.entityId in newlyActive }
+                            .joinToString(", ") { it.title ?: it.friendlyName }
+                        historyRepository.add("weather", "Weather warning: $names")
+                        wakeDisplay()
+                    }
+                    if (cleared.isNotEmpty() && activeIds.isEmpty()) {
+                        historyRepository.add("weather", "Weather warnings cleared")
+                    }
+                    lastActiveWeatherWarningIds = activeIds
                     _houseSummary.value = HouseSummaryUiState(summary = summary)
                 }
                 .onFailure { error ->

@@ -86,3 +86,18 @@ When MQTT, CameraX and kiosk services are added, split into modules:
 :feature:sensors
 :feature:camera
 ```
+
+## v0.6.8 maps and weather alerts
+
+### People map
+
+`person.*` and `zone.*` coordinates remain sourced exclusively from Home Assistant. The UI can render them on either:
+
+- the existing offline coordinate canvas, or
+- OpenStreetMap raster tiles from `https://tile.openstreetmap.org/{z}/{x}/{y}.png`.
+
+The OpenStreetMap client requests only tiles visible in the current viewport, identifies HomePanel with a dedicated User-Agent, uses an OkHttp disk cache and keeps visible attribution on the map. No person identifiers are sent to the tile server; only normal tile requests for the viewed area are made.
+
+### Contextual weather warnings
+
+`HomeAssistantRestClient` discovers `binary_sensor.weather_warning*` / MeteoAlarm-like entities while building the house summary. `MainViewModel` compares the active warning set after each refresh. A newly active warning wakes the display and records a history event. `AlarmScreen` then opens a contextual warning dialog while keeping the normal warning banner visible after dismissal.

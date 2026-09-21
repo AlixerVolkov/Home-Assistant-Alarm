@@ -1,3 +1,12 @@
+# HomePanel 0.6.8 build notes
+
+- `versionCode = 19`, `versionName = 0.6.8`.
+- Mapa de personas con fondo OpenStreetMap opcional y mapa offline como alternativa.
+- Cache HTTP local de tiles OSM, User-Agent identificable y atribucion visible.
+- Diagnostico de red incluye `tile.openstreetmap.org:443`.
+- Avisos meteorologicos activos despiertan la pantalla y abren modo contextual.
+- Structural validation performed locally; final Android compilation remains GitHub Actions.
+
 # HomePanel 0.6.7 build notes
 
 - `versionCode = 18`, `versionName = 0.6.7`.

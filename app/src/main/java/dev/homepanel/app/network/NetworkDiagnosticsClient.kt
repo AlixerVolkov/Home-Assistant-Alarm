@@ -60,6 +60,7 @@ class NetworkDiagnosticsClient(
             SystemClock.elapsedRealtime() - started
         })
         onItem(probe("open_meteo") { weatherClient.probe() })
+        onItem(probe("osm") { probeOsmTile() })
 
         onItem(probe("github") { probeHttps("https://api.github.com/repos/AlixerVolkov/Home-Assistant-Alarm/releases/latest") })
 
@@ -91,6 +92,23 @@ class NetworkDiagnosticsClient(
     private suspend fun probeHttps(url: String): Long = withContext(Dispatchers.IO) {
         val started = SystemClock.elapsedRealtime()
         client.newCall(Request.Builder().url(url).get().build()).execute().use { response ->
+            if (!response.isSuccessful) error("HTTP ${response.code}")
+        }
+        SystemClock.elapsedRealtime() - started
+    }
+
+
+    private suspend fun probeOsmTile(): Long = withContext(Dispatchers.IO) {
+        val started = SystemClock.elapsedRealtime()
+        val request = Request.Builder()
+            .url("https://tile.openstreetmap.org/0/0/0.png")
+            .header(
+                "User-Agent",
+                "HomePanel/${dev.homepanel.app.BuildConfig.VERSION_NAME} (+https://github.com/AlixerVolkov/Home-Assistant-Alarm)"
+            )
+            .get()
+            .build()
+        client.newCall(request).execute().use { response ->
             if (!response.isSuccessful) error("HTTP ${response.code}")
         }
         SystemClock.elapsedRealtime() - started
