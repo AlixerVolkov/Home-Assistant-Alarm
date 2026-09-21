@@ -51,3 +51,14 @@ No se ejecuto `assembleRelease` localmente porque este contenedor no dispone de 
 ## v0.6.2 LAN diagnostics and routing
 
 MQTT is now bound to the selected Wi-Fi/Ethernet `Network`, and Settings shows the LAN IPv4, broker resolution and TCP reachability. RTSP startup order and encoder fallback were also hardened.
+
+## v0.6.3 RTSP crash hardening
+
+- RTSP moved from Camera2 to the Camera1 compatibility backend for wall-panel stability.
+- RootEncoder reverted to 2.8.0 to match the RTSP-Server 1.4.2 upstream documented pairing.
+- RTSP startup/stop/stats are serialized on a dedicated worker thread.
+- Startup crash guard prevents repeated auto-start crash loops.
+
+
+## v0.6.4 stability diagnostics
+RTSP/MQTT are lazy, a persistent Java/Kotlin crash report is installed, and the next boot after an uncaught crash uses Safe Mode. Native camera-driver crashes or OS process kills may not produce a Java stack trace.

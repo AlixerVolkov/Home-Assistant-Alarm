@@ -15,6 +15,7 @@
     <uses-feature android:name="android.hardware.sensor.light" android:required="false" />
 
     <application
+        android:name=".HomePanelApplication"
         android:allowBackup="false"
         android:label="@string/app_name"
         android:supportsRtl="true"

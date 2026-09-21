@@ -2,6 +2,8 @@ package dev.homepanel.app.ui
 
 import android.Manifest
 import android.app.Activity
+import android.content.ClipData
+import android.content.ClipboardManager
 import android.content.Context
 import android.content.ContextWrapper
 import android.content.Intent
@@ -36,6 +38,7 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -56,6 +59,7 @@ import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.homepanel.app.MainViewModel
+import dev.homepanel.app.diagnostics.CrashLogStore
 import dev.homepanel.app.R
 import dev.homepanel.app.PanelDisplayMode
 
@@ -80,6 +84,8 @@ fun HomePanelApp(viewModel: MainViewModel) {
     val displayMode by viewModel.displayMode.collectAsStateWithLifecycle()
     val wakePulse by viewModel.wakePulse.collectAsStateWithLifecycle()
 
+    val safeMode = viewModel.isSafeMode()
+    var crashReport by remember { mutableStateOf(CrashLogStore.pendingReport(context)) }
     var showSettingsPin by rememberSaveable { mutableStateOf(false) }
     var pendingInstallerUri by rememberSaveable { mutableStateOf<String?>(null) }
 
@@ -174,7 +180,7 @@ fun HomePanelApp(viewModel: MainViewModel) {
                         context,
                         Manifest.permission.ACCESS_LOCAL_NETWORK
                     ) == PackageManager.PERMISSION_GRANTED
-                if (settingsLoaded && settings?.rtspEnabled == true && localNetworkGranted &&
+                if (!safeMode && settingsLoaded && settings?.rtspEnabled == true && localNetworkGranted &&
                     !viewModel.hasCameraPermission()
                 ) {
                     cameraPermissionLauncher.launch(Manifest.permission.CAMERA)
@@ -183,7 +189,9 @@ fun HomePanelApp(viewModel: MainViewModel) {
                 }
             }
             2 -> {
-                if (viewModel.hasLocationPermission()) {
+                if (safeMode) {
+                    startupPermissionStage = 3
+                } else if (viewModel.hasLocationPermission()) {
                     viewModel.refreshDeviceLocation()
                     startupPermissionStage = 3
                 } else {
@@ -205,7 +213,7 @@ fun HomePanelApp(viewModel: MainViewModel) {
                 context,
                 Manifest.permission.ACCESS_LOCAL_NETWORK
             ) == PackageManager.PERMISSION_GRANTED
-        if (startupPermissionStage >= 3 && settings?.rtspEnabled == true &&
+        if (!safeMode && startupPermissionStage >= 3 && settings?.rtspEnabled == true &&
             localNetworkGranted && !viewModel.hasCameraPermission()
         ) {
             cameraPermissionLauncher.launch(Manifest.permission.CAMERA)
@@ -215,9 +223,10 @@ fun HomePanelApp(viewModel: MainViewModel) {
     // Android can revoke runtime permissions and hibernate apps that remain unused. A wall-panel
     // app should normally be exempt, but only the user can change that system policy.
     LaunchedEffect(startupPermissionStage, unusedAppStatusChecked, showLocalNetworkDenied) {
-        if (startupPermissionStage < 3 || unusedAppStatusChecked || showLocalNetworkDenied) return@LaunchedEffect
+        if (safeMode || startupPermissionStage < 3 || unusedAppStatusChecked || showLocalNetworkDenied) return@LaunchedEffect
         unusedAppStatusChecked = true
-        val future = PackageManagerCompat.getUnusedAppRestrictionsStatus(context)
+        val future = runCatching { PackageManagerCompat.getUnusedAppRestrictionsStatus(context) }
+            .getOrNull() ?: return@LaunchedEffect
         future.addListener({
             val status = runCatching { future.get() }.getOrNull()
             showUnusedAppRestrictions = status == UnusedAppRestrictionsConstants.API_30 ||
@@ -228,7 +237,7 @@ fun HomePanelApp(viewModel: MainViewModel) {
 
     // Proximity: publish state and wake on FAR -> NEAR while sleeping/saver.
     DisposableEffect(context, settings?.proximityWakeEnabled, displayMode) {
-        val shouldListen = settings?.proximityWakeEnabled == true
+        val shouldListen = !safeMode && settings?.proximityWakeEnabled == true
         if (!shouldListen) return@DisposableEffect onDispose { }
 
         val sensorManager = context.getSystemService(Context.SENSOR_SERVICE) as SensorManager
@@ -251,13 +260,15 @@ fun HomePanelApp(viewModel: MainViewModel) {
             }
             override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) = Unit
         }
-        if (proximity != null) sensorManager.registerListener(listener, proximity, SensorManager.SENSOR_DELAY_NORMAL)
-        onDispose { sensorManager.unregisterListener(listener) }
+        if (proximity != null) runCatching {
+            sensorManager.registerListener(listener, proximity, SensorManager.SENSOR_DELAY_NORMAL)
+        }
+        onDispose { runCatching { sensorManager.unregisterListener(listener) } }
     }
 
     // Ambient-light sensor: drives auto-brightness and is published over MQTT Discovery.
     DisposableEffect(context, settings?.autoBrightnessEnabled, settings?.mqttDiscoveryEnabled) {
-        val shouldListen = settings?.autoBrightnessEnabled == true || settings?.mqttDiscoveryEnabled == true
+        val shouldListen = !safeMode && (settings?.autoBrightnessEnabled == true || settings?.mqttDiscoveryEnabled == true)
         if (!shouldListen) return@DisposableEffect onDispose { }
         val sensorManager = context.getSystemService(Context.SENSOR_SERVICE) as SensorManager
         val light = sensorManager.getDefaultSensor(Sensor.TYPE_LIGHT)
@@ -267,20 +278,26 @@ fun HomePanelApp(viewModel: MainViewModel) {
             }
             override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) = Unit
         }
-        if (light != null) sensorManager.registerListener(listener, light, SensorManager.SENSOR_DELAY_NORMAL)
-        onDispose { sensorManager.unregisterListener(listener) }
+        if (light != null) runCatching {
+            sensorManager.registerListener(listener, light, SensorManager.SENSOR_DELAY_NORMAL)
+        }
+        onDispose { runCatching { sensorManager.unregisterListener(listener) } }
     }
 
     LaunchedEffect(displayMode, ambientLux, settings?.autoBrightnessEnabled, activity) {
-        activity?.setPanelBrightness(displayMode, settings?.autoBrightnessEnabled == true, ambientLux)
+        activity?.let { current ->
+            runCatching { current.setPanelBrightness(displayMode, !safeMode && settings?.autoBrightnessEnabled == true, ambientLux) }
+        }
     }
 
     LaunchedEffect(settings?.kioskModeEnabled, editing, activity) {
-        activity?.applyImmersiveKiosk(settings?.kioskModeEnabled == true && !editing)
+        activity?.let { current ->
+            runCatching { current.applyImmersiveKiosk(settings?.kioskModeEnabled == true && !editing) }
+        }
     }
 
     LaunchedEffect(wakePulse, activity) {
-        if (wakePulse > 0L) activity?.wakeHardwareScreen()
+        if (wakePulse > 0L) activity?.let { current -> runCatching { current.wakeHardwareScreen() } }
     }
 
     LaunchedEffect(update.installerUri) {
@@ -437,6 +454,37 @@ fun HomePanelApp(viewModel: MainViewModel) {
                 TextButton(onClick = { showUnusedAppRestrictions = false }) {
                     Text(stringResource(R.string.later))
                 }
+            }
+        )
+    }
+
+    if (crashReport != null) {
+        val report = crashReport.orEmpty()
+        AlertDialog(
+            onDismissRequest = {
+                CrashLogStore.markReportShown(context)
+                crashReport = null
+            },
+            title = { Text(stringResource(R.string.crash_detected_title)) },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(stringResource(if (safeMode) R.string.crash_safe_mode_message else R.string.crash_detected_message))
+                    Text(report.take(1600))
+                }
+            },
+            confirmButton = {
+                Button(onClick = {
+                    val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                    clipboard.setPrimaryClip(ClipData.newPlainText("HomePanel crash report", report))
+                    CrashLogStore.markReportShown(context)
+                    crashReport = null
+                }) { Text(stringResource(R.string.copy_crash_report)) }
+            },
+            dismissButton = {
+                TextButton(onClick = {
+                    CrashLogStore.markReportShown(context)
+                    crashReport = null
+                }) { Text(stringResource(R.string.close)) }
             }
         )
     }

@@ -17,8 +17,8 @@ android {
         applicationId = "dev.homepanel.app"
         minSdk = 26
         targetSdk = 37
-        versionCode = 13
-        versionName = "0.6.2"
+        versionCode = 15
+        versionName = "0.6.4"
     }
 
     buildFeatures {
@@ -76,5 +76,5 @@ dependencies {
 
     // Front-camera RTSP server (video-only).
     implementation("com.github.pedroSG94:RTSP-Server:1.4.2")
-    implementation("com.github.pedroSG94.RootEncoder:library:2.8.1")
+    implementation("com.github.pedroSG94.RootEncoder:library:2.8.0")
 }

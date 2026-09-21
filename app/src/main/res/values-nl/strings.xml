@@ -123,4 +123,8 @@
     <string name="network_diag_tcp_ok">TCP-poort bereikbaar</string>
     <string name="network_diag_tcp_fail">TCP-poort niet bereikbaar</string>
     <string name="rtsp_resolution">Encoder: %1$dx%2$d</string>
+    <string name="crash_detected_title">HomePanel is hersteld van een crash</string>
+    <string name="crash_detected_message">Tijdens de vorige uitvoering is een crash geregistreerd. Kopieer het rapport voor diagnose.</string>
+    <string name="crash_safe_mode_message">Tijdens het opstarten is een crash geregistreerd. Deze start gebruikt Veilige modus: RTSP, MQTT, sensoren en automatische updatecontroles zijn tijdelijk uitgeschakeld. Kopieer het rapport voor diagnose.</string>
+    <string name="copy_crash_report">Crashrapport kopiëren</string>
 </resources>

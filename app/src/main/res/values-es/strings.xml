@@ -177,4 +177,8 @@
     <string name="network_diag_tcp_ok">Puerto TCP accesible</string>
     <string name="network_diag_tcp_fail">Puerto TCP no accesible</string>
     <string name="rtsp_resolution">Codificador: %1$dx%2$d</string>
+    <string name="crash_detected_title">HomePanel se recuperó de un cierre inesperado</string>
+    <string name="crash_detected_message">Se registró un fallo en la ejecución anterior. Copia el informe y envíalo para poder diagnosticarlo.</string>
+    <string name="crash_safe_mode_message">Se registró un fallo durante el arranque. Esta ejecución usa Modo seguro: RTSP, MQTT, sensores y las comprobaciones automáticas de actualización están desactivados temporalmente. Copia el informe para diagnosticarlo.</string>
+    <string name="copy_crash_report">Copiar informe de fallo</string>
 </resources>

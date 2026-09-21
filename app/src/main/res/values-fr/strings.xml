@@ -118,4 +118,8 @@
     <string name="network_diag_tcp_ok">Port TCP accessible</string>
     <string name="network_diag_tcp_fail">Port TCP inaccessible</string>
     <string name="rtsp_resolution">Encodeur : %1$dx%2$d</string>
+    <string name="crash_detected_title">HomePanel s’est remis d’un plantage</string>
+    <string name="crash_detected_message">Un plantage a été enregistré lors de l’exécution précédente. Copiez le rapport pour le diagnostic.</string>
+    <string name="crash_safe_mode_message">Un plantage a été enregistré au démarrage. Ce lancement utilise le mode sans échec : RTSP, MQTT, les capteurs et la vérification automatique des mises à jour sont temporairement désactivés. Copiez le rapport pour le diagnostic.</string>
+    <string name="copy_crash_report">Copier le rapport de plantage</string>
 </resources>

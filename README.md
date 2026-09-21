@@ -1,4 +1,4 @@
-# HomePanel v0.6.0
+# HomePanel v0.6.4
 
 Panel Android moderno para Home Assistant / Alarmo, pensado para tablets de pared.
 
@@ -105,6 +105,14 @@ versionName = 0.6.0
 ## Kiosk
 
 El modo kiosk de v0.6.0 oculta barras de sistema y puede exigir PIN para entrar en Configuracion. No convierte automaticamente el dispositivo en Android Device Owner; un bloqueo total de cambio de aplicaciones requiere provisionamiento adicional y queda como mejora futura.
+
+## Estabilidad y diagnostico (v0.6.4)
+
+- RTSP y MQTT son modulos lazy: si estan desactivados no se instancian durante el arranque.
+- Tras un cierre Java/Kotlin inesperado, el siguiente arranque muestra un informe copiable con el stack trace.
+- El primer arranque tras un crash usa Modo seguro durante esa sesion: RTSP, MQTT, sensores y chequeos automaticos de actualizacion quedan temporalmente desactivados para comprobar si el nucleo de alarma es estable.
+- Si la aplicacion vuelve a cerrarse y no aparece ningun informe al siguiente arranque, el fallo puede ser nativo/driver o un cierre del proceso por Android; en ese caso necesitaremos logcat.
+
 
 ## Android 17 permissions (v0.6.1)
 

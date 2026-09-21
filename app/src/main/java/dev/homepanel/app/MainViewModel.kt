@@ -1,14 +1,19 @@
 package dev.homepanel.app
 
+import android.Manifest
 import android.app.Application
+import android.content.pm.PackageManager
 import android.os.SystemClock
+import androidx.core.content.ContextCompat
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import dev.homepanel.app.camera.RtspCameraServer
+import dev.homepanel.app.camera.RtspCameraState
 import dev.homepanel.app.data.EventHistoryRepository
 import dev.homepanel.app.data.PanelEvent
 import dev.homepanel.app.data.PanelSettings
 import dev.homepanel.app.data.SettingsRepository
+import dev.homepanel.app.diagnostics.CrashLogStore
 import dev.homepanel.app.network.AlarmAction
 import dev.homepanel.app.network.AlarmEntitySummary
 import dev.homepanel.app.network.ConnectionStatus
@@ -25,7 +30,9 @@ import dev.homepanel.app.network.UpdateClient
 import dev.homepanel.app.network.UpdateInfo
 import dev.homepanel.app.mqtt.DeviceTelemetryReader
 import dev.homepanel.app.mqtt.MqttDeviceBridge
+import dev.homepanel.app.mqtt.MqttDeviceState
 import java.util.concurrent.TimeUnit
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -95,15 +102,21 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val socketClient = HomeAssistantWebSocket(httpClient)
     private val weatherClient = WeatherClient(httpClient)
     private val locationResolver = DeviceLocationResolver(application)
-    private val rtspCameraServer = RtspCameraServer(application)
     private val telemetryReader = DeviceTelemetryReader(application)
     private val historyRepository = EventHistoryRepository(application)
     private val updateClient = UpdateClient(application, httpClient)
-    private val mqttDeviceBridge = MqttDeviceBridge(application) { screenOn ->
-        viewModelScope.launch {
-            if (screenOn) wakeDisplay() else forceSleepFromMqtt()
-        }
-    }
+    private val safeMode = CrashLogStore.isSafeMode()
+
+    // v0.6.4: optional integrations are genuinely lazy. With RTSP/MQTT disabled their
+    // libraries are not instantiated during normal app startup. This isolates vendor camera
+    // and MQTT stacks from the core alarm panel and makes startup crashes diagnosable.
+    private var rtspCameraServer: RtspCameraServer? = null
+    private var rtspStateJob: Job? = null
+    private val _rtspCamera = MutableStateFlow(RtspCameraState())
+
+    private var mqttDeviceBridge: MqttDeviceBridge? = null
+    private var mqttStateJob: Job? = null
+    private val _mqttDevice = MutableStateFlow(MqttDeviceState())
 
     private val _settings = MutableStateFlow<PanelSettings?>(null)
     val settings: StateFlow<PanelSettings?> = _settings.asStateFlow()
@@ -144,8 +157,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     val wakePulse: StateFlow<Long> = _wakePulse.asStateFlow()
 
     val connection = socketClient.state
-    val rtspCamera = rtspCameraServer.state
-    val mqttDevice = mqttDeviceBridge.state
+    val rtspCamera: StateFlow<RtspCameraState> = _rtspCamera.asStateFlow()
+    val mqttDevice: StateFlow<MqttDeviceState> = _mqttDevice.asStateFlow()
 
     private var lastActivityElapsed = SystemClock.elapsedRealtime()
     private var lastGuestVoucherCode: String? = null
@@ -163,11 +176,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 _settingsLoaded.value = true
                 userActivity()
                 applyRtspSettings(current)
-                mqttDeviceBridge.applySettings(current)
+                applyMqttSettings(current)
                 if (current != null && !_editing.value) {
                     connect(current)
                     loadHouseSummary(showSpinner = _houseSummary.value.summary == null)
-                    if (current.updateChecksEnabled &&
+                    if (!safeMode && current.updateChecksEnabled &&
                         (lastAutomaticUpdateCheckElapsed == 0L ||
                             SystemClock.elapsedRealtime() - lastAutomaticUpdateCheckElapsed > UPDATE_CHECK_INTERVAL_MS)
                     ) {
@@ -188,15 +201,18 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
         viewModelScope.launch {
             while (isActive) {
-                updateDisplayMode()
-                rtspCameraServer.refreshStats()
+                runCatching { updateDisplayMode() }
+                val server = rtspCameraServer
+                if (!safeMode && _settings.value?.rtspEnabled == true && server != null) {
+                    runCatching { server.refreshStats() }
+                }
                 delay(1_000L)
             }
         }
 
         viewModelScope.launch {
             while (isActive) {
-                publishDeviceTelemetry()
+                runCatching { publishDeviceTelemetry() }
                 delay(5_000L)
             }
         }
@@ -294,30 +310,45 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun hasLocationPermission(): Boolean = locationResolver.hasLocationPermission()
-    fun hasCameraPermission(): Boolean = rtspCameraServer.hasCameraPermission()
+    fun hasCameraPermission(): Boolean =
+        ContextCompat.checkSelfPermission(getApplication<Application>(), Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED
+
+    fun isSafeMode(): Boolean = safeMode
 
     fun onCameraPermissionResult(granted: Boolean) {
         val current = _settings.value ?: return
-        if (granted && current.rtspEnabled) {
-            rtspCameraServer.start(current.rtspPort, current.rtspAdvertisedHost)
+        if (!safeMode && granted && current.rtspEnabled) {
+            runCatching { ensureRtspServer().start(current.rtspPort, current.rtspAdvertisedHost) }
+                .onFailure { setRtspStartupError(it) }
         }
     }
 
     fun onLocalNetworkPermissionResult(granted: Boolean) {
         val current = _settings.value ?: return
         if (!granted) {
-            // MqttDeviceBridge already exposes a clear permission-required state instead of
-            // attempting a connection that will only end in a timeout.
-            mqttDeviceBridge.applySettings(current)
+            if (current.mqttDiscoveryEnabled) {
+                _mqttDevice.value = MqttDeviceState(
+                    enabled = true,
+                    errorMessage = "Local network permission is required before MQTT can connect"
+                )
+            }
+            if (current.rtspEnabled) {
+                _rtspCamera.value = _rtspCamera.value.copy(
+                    enabled = true,
+                    running = false,
+                    errorMessage = "Local network permission is required for the RTSP server"
+                )
+            }
             return
         }
-        // Retry every LAN-dependent service after the Android 17 runtime permission is granted.
-        // v0.5.0 retried Home Assistant/RTSP here but accidentally omitted MQTT.
-        mqttDeviceBridge.applySettings(current)
+        applyMqttSettings(current)
         connect(current)
-        if (current.rtspEnabled) {
-            rtspCameraServer.stop()
-            rtspCameraServer.start(current.rtspPort, current.rtspAdvertisedHost)
+        if (!safeMode && current.rtspEnabled) {
+            runCatching {
+                val server = ensureRtspServer()
+                server.stop()
+                server.start(current.rtspPort, current.rtspAdvertisedHost)
+            }.onFailure { setRtspStartupError(it) }
         }
     }
 
@@ -483,8 +514,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             _editing.value = true
             socketClient.disconnect()
-            rtspCameraServer.stop()
-            mqttDeviceBridge.disconnect()
+            rtspCameraServer?.stop()
+            mqttDeviceBridge?.disconnect()
             settingsRepository.clear()
             _editing.value = false
             _discovery.value = DiscoveryState()
@@ -611,8 +642,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     private fun publishDeviceTelemetry() {
-        val rtsp = rtspCameraServer.state.value
-        mqttDeviceBridge.publishTelemetry(
+        val rtsp = _rtspCamera.value
+        mqttDeviceBridge?.publishTelemetry(
             telemetryReader.read(
                 proximityNear = localProximityNear,
                 ambientLightLux = _ambientLux.value,
@@ -667,29 +698,108 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     private fun connect(settings: PanelSettings) {
-        socketClient.connect(
-            baseUrl = settings.baseUrl,
-            token = settings.accessToken,
-            entityId = settings.alarmEntityId,
-            wakeEntityId = settings.wakeEntityId,
-            guestVoucherSensorEntityId = settings.guestVoucherSensorEntityId,
-            guestCreateButtonEntityId = settings.guestCreateButtonEntityId,
-            guestDeleteButtonEntityId = settings.guestDeleteButtonEntityId
-        )
+        runCatching {
+            socketClient.connect(
+                baseUrl = settings.baseUrl,
+                token = settings.accessToken,
+                entityId = settings.alarmEntityId,
+                wakeEntityId = settings.wakeEntityId,
+                guestVoucherSensorEntityId = settings.guestVoucherSensorEntityId,
+                guestCreateButtonEntityId = settings.guestCreateButtonEntityId,
+                guestDeleteButtonEntityId = settings.guestDeleteButtonEntityId
+            )
+        }.onFailure { error ->
+            historyRepository.add("error", "Home Assistant connection failed: ${error.javaClass.simpleName}: ${error.message.orEmpty()}")
+        }
+    }
+
+    private fun ensureRtspServer(): RtspCameraServer {
+        rtspCameraServer?.let { return it }
+        val created = RtspCameraServer(getApplication<Application>())
+        rtspCameraServer = created
+        rtspStateJob?.cancel()
+        rtspStateJob = viewModelScope.launch {
+            created.state.collect { state -> _rtspCamera.value = state }
+        }
+        return created
+    }
+
+    private fun ensureMqttBridge(): MqttDeviceBridge {
+        mqttDeviceBridge?.let { return it }
+        val created = MqttDeviceBridge(getApplication<Application>()) { screenOn ->
+            viewModelScope.launch {
+                if (screenOn) wakeDisplay() else forceSleepFromMqtt()
+            }
+        }
+        mqttDeviceBridge = created
+        mqttStateJob?.cancel()
+        mqttStateJob = viewModelScope.launch {
+            created.state.collect { state -> _mqttDevice.value = state }
+        }
+        return created
+    }
+
+    private fun applyMqttSettings(settings: PanelSettings?) {
+        if (safeMode) {
+            mqttDeviceBridge?.disconnect()
+            _mqttDevice.value = MqttDeviceState(
+                enabled = settings?.mqttDiscoveryEnabled == true,
+                connected = false,
+                errorMessage = if (settings?.mqttDiscoveryEnabled == true) "Disabled for this launch by crash safe mode" else null
+            )
+            return
+        }
+        if (settings?.mqttDiscoveryEnabled == true && settings.mqttHost.isNotBlank()) {
+            runCatching { ensureMqttBridge().applySettings(settings) }
+                .onFailure { error ->
+                    _mqttDevice.value = MqttDeviceState(
+                        enabled = true,
+                        connected = false,
+                        errorMessage = "MQTT startup failed: ${error.javaClass.simpleName}: ${error.message.orEmpty()}"
+                    )
+                }
+        } else {
+            mqttDeviceBridge?.applySettings(settings)
+            _mqttDevice.value = MqttDeviceState(enabled = false)
+        }
     }
 
     private fun applyRtspSettings(settings: PanelSettings?) {
-        if (settings?.rtspEnabled == true) {
-            rtspCameraServer.start(settings.rtspPort, settings.rtspAdvertisedHost)
-        } else {
-            rtspCameraServer.stop()
+        if (safeMode) {
+            rtspCameraServer?.stop()
+            _rtspCamera.value = RtspCameraState(
+                enabled = settings?.rtspEnabled == true,
+                running = false,
+                port = settings?.rtspPort ?: 8554,
+                errorMessage = if (settings?.rtspEnabled == true) "Disabled for this launch by crash safe mode" else null
+            )
+            return
         }
+        if (settings?.rtspEnabled == true) {
+            runCatching { ensureRtspServer().start(settings.rtspPort, settings.rtspAdvertisedHost) }
+                .onFailure { setRtspStartupError(it) }
+        } else {
+            rtspCameraServer?.stop()
+            _rtspCamera.value = RtspCameraState(
+                enabled = false,
+                port = settings?.rtspPort ?: 8554
+            )
+        }
+    }
+
+    private fun setRtspStartupError(error: Throwable) {
+        _rtspCamera.value = _rtspCamera.value.copy(
+            running = false,
+            errorMessage = "RTSP startup failed: ${error.javaClass.simpleName}: ${error.message.orEmpty()}"
+        )
     }
 
     override fun onCleared() {
         socketClient.disconnect()
-        rtspCameraServer.stop()
-        mqttDeviceBridge.close()
+        rtspStateJob?.cancel()
+        mqttStateJob?.cancel()
+        rtspCameraServer?.shutdown()
+        mqttDeviceBridge?.close()
         httpClient.dispatcher.executorService.shutdown()
         httpClient.connectionPool.evictAll()
         super.onCleared()
