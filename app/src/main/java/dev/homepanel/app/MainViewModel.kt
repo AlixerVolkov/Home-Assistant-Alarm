@@ -353,8 +353,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun onAmbientLightChanged(lux: Float) {
+        // Light sensors can emit dozens of callbacks per second. Keep only the latest reading;
+        // the normal 5-second telemetry loop publishes it to MQTT without flooding Paho.
         _ambientLux.value = lux.coerceAtLeast(0f)
-        publishDeviceTelemetry()
     }
 
     fun checkForUpdates(showSpinner: Boolean = true) {

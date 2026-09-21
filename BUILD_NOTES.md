@@ -62,3 +62,14 @@ MQTT is now bound to the selected Wi-Fi/Ethernet `Network`, and Settings shows t
 
 ## v0.6.4 stability diagnostics
 RTSP/MQTT are lazy, a persistent Java/Kotlin crash report is installed, and the next boot after an uncaught crash uses Safe Mode. Native camera-driver crashes or OS process kills may not produce a Java stack trace.
+
+
+## v0.6.5 MQTT backpressure fix
+
+- Fixes Paho MqttException 32202 (too many publishes in progress).
+- MQTT telemetry is now conflated through a single worker.
+- Retained state telemetry uses QoS 0 and unchanged values are skipped.
+- High-frequency ambient-light callbacks no longer trigger immediate MQTT batches.
+- MQTT publish exceptions are contained and reported instead of crashing HomePanel.
+- Initial Paho connection setup is de-duplicated to avoid double discovery/state bursts.
+- versionCode 16 / versionName 0.6.5.

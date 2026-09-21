@@ -17,11 +17,13 @@ import java.net.Socket
 import java.net.SocketTimeoutException
 import java.net.UnknownHostException
 import java.util.Locale
+import java.util.concurrent.ConcurrentHashMap
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -77,6 +79,21 @@ class MqttDeviceBridge(
     private var client: MqttAsyncClient? = null
     private var activeConfig: MqttConfig? = null
     private var latestTelemetry: DeviceTelemetry? = null
+    private val telemetryChannel = Channel<DeviceTelemetry>(Channel.CONFLATED)
+    private val lastPublishedState = ConcurrentHashMap<String, String>()
+    @Volatile private var initializedClient: MqttAsyncClient? = null
+
+    init {
+        // A single conflated worker is deliberately used here. Ambient-light sensors can emit
+        // dozens of callbacks per second; launching one QoS 1 publish batch for every callback
+        // can exhaust Paho's in-flight window and throw MqttException(32202), which used to
+        // terminate the process. Keeping only the newest telemetry snapshot prevents backlog.
+        scope.launch {
+            for (telemetry in telemetryChannel) {
+                publishTelemetryInternal(telemetry)
+            }
+        }
+    }
 
     private val _state = MutableStateFlow(MqttDeviceState(deviceIdentifier = deviceIdentifier))
     val state: StateFlow<MqttDeviceState> = _state.asStateFlow()
@@ -124,12 +141,14 @@ class MqttDeviceBridge(
     fun publishTelemetry(telemetry: DeviceTelemetry) {
         latestTelemetry = telemetry
         if (client?.isConnected != true) return
-        scope.launch { publishTelemetryInternal(telemetry) }
+        telemetryChannel.trySend(telemetry)
     }
 
     fun disconnect() {
         val current = client
         client = null
+        initializedClient = null
+        lastPublishedState.clear()
         activeConfig = null
         if (current != null) {
             runCatching {
@@ -204,6 +223,10 @@ class MqttDeviceBridge(
                 setCleanSession(true)
                 setConnectionTimeout(10)
                 setKeepAliveInterval(30)
+                // Keep a deliberately small, explicit ceiling. Telemetry is QoS 0 and
+                // conflated, so this window is only needed for the small number of QoS 1
+                // discovery/availability messages.
+                setMaxInflight(20)
                 // Android Network.socketFactory binds plain MQTT to Wi-Fi/Ethernet and bypasses
                 // an unrelated VPN/default route. TLS stays on the platform SSL factory so
                 // certificate validation is not weakened.
@@ -262,6 +285,14 @@ class MqttDeviceBridge(
 
     private fun onConnected(mqttClient: MqttAsyncClient, brokerUri: String?) {
         if (client !== mqttClient || !mqttClient.isConnected) return
+        synchronized(this) {
+            // Paho can invoke connectComplete() before connect().waitForCompletion() returns.
+            // Without this guard the initial session was initialized twice, duplicating all
+            // discovery/state publishes during startup.
+            if (initializedClient === mqttClient) return
+            initializedClient = mqttClient
+        }
+        lastPublishedState.clear()
         _state.value = _state.value.copy(
             enabled = true,
             connected = true,
@@ -274,8 +305,8 @@ class MqttDeviceBridge(
             mqttClient.subscribe(screenCommandTopic, 1).waitForCompletion(5_000L)
             mqttClient.subscribe("homeassistant/status", 0).waitForCompletion(5_000L)
             publishDiscovery(mqttClient)
-            publish(mqttClient, availabilityTopic, "online", retained = true)
-            latestTelemetry?.let { publishTelemetryInternal(it) }
+            publish(mqttClient, availabilityTopic, "online", retained = true, qos = 1)
+            latestTelemetry?.let { telemetryChannel.trySend(it) }
         }.onFailure { error ->
             _state.value = _state.value.copy(errorMessage = error.message)
         }
@@ -289,6 +320,8 @@ class MqttDeviceBridge(
         }
 
         override fun connectionLost(cause: Throwable?) {
+            initializedClient = null
+            lastPublishedState.clear()
             _state.value = _state.value.copy(
                 connected = false,
                 errorMessage = cause?.message
@@ -306,8 +339,8 @@ class MqttDeviceBridge(
                     client?.let { current ->
                         scope.launch {
                             publishDiscovery(current)
-                            publish(current, availabilityTopic, "online", retained = true)
-                            latestTelemetry?.let { publishTelemetryInternal(it) }
+                            publish(current, availabilityTopic, "online", retained = true, qos = 1)
+                            latestTelemetry?.let { telemetryChannel.trySend(it) }
                         }
                     }
                 }
@@ -473,7 +506,7 @@ class MqttDeviceBridge(
             "sensor" to "rtsp_url"
         )
         entities.forEach { (platform, objectId) ->
-            publish(mqttClient, "homeassistant/$platform/homepanel_$shortId/$objectId/config", "", retained = true)
+            publish(mqttClient, "homeassistant/$platform/homepanel_$shortId/$objectId/config", "", retained = true, qos = 0)
         }
     }
 
@@ -487,41 +520,64 @@ class MqttDeviceBridge(
             mqttClient,
             "homeassistant/$platform/homepanel_$shortId/$objectId/config",
             payload.toString(),
-            retained = true
+            retained = true,
+            qos = 0
         )
     }
 
     private fun publishTelemetryInternal(telemetry: DeviceTelemetry) {
         val mqttClient = client ?: return
         if (!mqttClient.isConnected) return
-        telemetry.batteryPercent?.let { publish(mqttClient, "$baseTopic/battery", it.toString(), true) }
+
+        // Telemetry/state uses retained QoS 0. Home Assistant only needs the latest value and
+        // retained state is replayed to subscribers; QoS 1 here provides little benefit while
+        // consuming Paho's finite in-flight window. Identical values are skipped altogether.
+        telemetry.batteryPercent?.let { publishState(mqttClient, "$baseTopic/battery", it.toString()) }
         telemetry.batteryTemperatureC?.let {
-            publish(mqttClient, "$baseTopic/battery_temperature", String.format(Locale.US, "%.1f", it), true)
+            publishState(mqttClient, "$baseTopic/battery_temperature", String.format(Locale.US, "%.1f", it))
         }
-        telemetry.charging?.let { publish(mqttClient, "$baseTopic/charging", if (it) "ON" else "OFF", true) }
-        telemetry.proximityNear?.let { publish(mqttClient, "$baseTopic/proximity", if (it) "ON" else "OFF", true) }
+        telemetry.charging?.let { publishState(mqttClient, "$baseTopic/charging", if (it) "ON" else "OFF") }
+        telemetry.proximityNear?.let { publishState(mqttClient, "$baseTopic/proximity", if (it) "ON" else "OFF") }
         telemetry.ambientLightLux?.let {
-            publish(mqttClient, "$baseTopic/illuminance", String.format(Locale.US, "%.1f", it), true)
+            publishState(mqttClient, "$baseTopic/illuminance", String.format(Locale.US, "%.1f", it))
         }
-        publish(mqttClient, "$baseTopic/display_mode", telemetry.displayMode, true)
-        publish(mqttClient, "$baseTopic/screen/state", if (telemetry.displayMode == "sleep") "OFF" else "ON", true)
-        publish(mqttClient, "$baseTopic/rtsp/running", if (telemetry.rtspRunning) "ON" else "OFF", true)
-        publish(mqttClient, "$baseTopic/rtsp/clients", telemetry.rtspClients.toString(), true)
-        publish(mqttClient, "$baseTopic/rtsp/url", telemetry.rtspUrl.orEmpty(), true)
-        publish(mqttClient, availabilityTopic, "online", true)
+        publishState(mqttClient, "$baseTopic/display_mode", telemetry.displayMode)
+        publishState(mqttClient, "$baseTopic/screen/state", if (telemetry.displayMode == "sleep") "OFF" else "ON")
+        publishState(mqttClient, "$baseTopic/rtsp/running", if (telemetry.rtspRunning) "ON" else "OFF")
+        publishState(mqttClient, "$baseTopic/rtsp/clients", telemetry.rtspClients.toString())
+        publishState(mqttClient, "$baseTopic/rtsp/url", telemetry.rtspUrl.orEmpty())
+    }
+
+    private fun publishState(mqttClient: MqttAsyncClient, topic: String, payload: String) {
+        if (lastPublishedState[topic] == payload) return
+        if (publish(mqttClient, topic, payload, retained = true, qos = 0)) {
+            lastPublishedState[topic] = payload
+        }
     }
 
     private fun publish(
         mqttClient: MqttAsyncClient,
         topic: String,
         payload: String,
-        retained: Boolean
-    ) {
-        if (!mqttClient.isConnected) return
-        val message = MqttMessage(payload.toByteArray(Charsets.UTF_8)).apply {
-            setQos(1)
-            setRetained(retained)
+        retained: Boolean,
+        qos: Int = 1
+    ): Boolean {
+        if (!mqttClient.isConnected) return false
+        return runCatching {
+            val message = MqttMessage(payload.toByteArray(Charsets.UTF_8)).apply {
+                setQos(qos)
+                setRetained(retained)
+            }
+            mqttClient.publish(topic, message)
+            true
+        }.getOrElse { error ->
+            // Never allow a transient broker/backpressure error to escape a coroutine and kill
+            // HomePanel. Paho's 32202 means the in-flight window is full; the conflated worker
+            // will publish a fresh snapshot on the next telemetry tick/reconnect.
+            _state.value = _state.value.copy(
+                errorMessage = error.message ?: "MQTT publish failed"
+            )
+            false
         }
-        mqttClient.publish(topic, message)
     }
 }

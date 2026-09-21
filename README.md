@@ -1,4 +1,4 @@
-# HomePanel v0.6.4
+# HomePanel v0.6.5
 
 Panel Android moderno para Home Assistant / Alarmo, pensado para tablets de pared.
 
