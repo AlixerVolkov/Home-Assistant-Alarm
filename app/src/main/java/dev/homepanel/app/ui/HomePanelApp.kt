@@ -272,14 +272,24 @@ fun HomePanelApp(viewModel: MainViewModel) {
         val sensorManager = context.getSystemService(Context.SENSOR_SERVICE) as SensorManager
         val proximity = preferredProximitySensor(sensorManager)
         var lastWakeElapsed = 0L
+        var previousNear: Boolean? = null
         val listener = object : SensorEventListener {
             override fun onSensorChanged(event: SensorEvent) {
                 val distance = event.values.firstOrNull() ?: return
                 val maxRange = event.sensor.maximumRange.takeIf { it > 0f } ?: 5f
                 val isNear = distance >= 0f && distance < maxRange
+                val previous = previousNear
+                previousNear = isNear
                 val now = SystemClock.elapsedRealtime()
                 viewModel.onProximityChanged(isNear)
-                if (currentDisplayMode != PanelDisplayMode.ACTIVE && isNear &&
+
+                // TYPE_PROXIMITY is an on-change sensor. Some Samsung devices expose a
+                // virtual "Palm Proximity" sensor that is more reliable on the transition
+                // than on a specific NEAR value, so wake on either a NEAR sample or a
+                // genuine near/far transition. The first sample after registration is not
+                // treated as a transition.
+                val changed = previous != null && previous != isNear
+                if (currentDisplayMode != PanelDisplayMode.ACTIVE && (isNear || changed) &&
                     now - lastWakeElapsed >= PROXIMITY_DEBOUNCE_MS
                 ) {
                     lastWakeElapsed = now
@@ -294,15 +304,50 @@ fun HomePanelApp(viewModel: MainViewModel) {
         onDispose { runCatching { sensorManager.unregisterListener(listener) } }
     }
 
-    // Ambient-light sensor: drives auto-brightness and is published over MQTT Discovery.
-    DisposableEffect(context, settings?.autoBrightnessEnabled, settings?.mqttDiscoveryEnabled) {
-        val shouldListen = !safeMode && (settings?.autoBrightnessEnabled == true || settings?.mqttDiscoveryEnabled == true)
+    // Ambient-light sensor: drives auto-brightness, MQTT telemetry and can optionally act
+    // as a wave-to-wake fallback on devices (notably recent Samsung phones/tablets) whose
+    // virtual proximity sensor is not useful to third-party apps.
+    DisposableEffect(
+        context,
+        settings?.autoBrightnessEnabled,
+        settings?.mqttDiscoveryEnabled,
+        settings?.lightWakeFallbackEnabled
+    ) {
+        val shouldListen = !safeMode && (
+            settings?.autoBrightnessEnabled == true ||
+                settings?.mqttDiscoveryEnabled == true ||
+                settings?.lightWakeFallbackEnabled == true
+            )
         if (!shouldListen) return@DisposableEffect onDispose { }
         val sensorManager = context.getSystemService(Context.SENSOR_SERVICE) as SensorManager
         val light = sensorManager.getDefaultSensor(Sensor.TYPE_LIGHT)
+        var previousLux: Float? = null
+        var previousLuxElapsed = 0L
+        var lastLightWakeElapsed = 0L
         val listener = object : SensorEventListener {
             override fun onSensorChanged(event: SensorEvent) {
-                event.values.firstOrNull()?.let(viewModel::onAmbientLightChanged)
+                val lux = event.values.firstOrNull() ?: return
+                viewModel.onAmbientLightChanged(lux)
+
+                val now = SystemClock.elapsedRealtime()
+                val previous = previousLux
+                val elapsed = now - previousLuxElapsed
+                previousLux = lux
+                previousLuxElapsed = now
+
+                if (settings?.lightWakeFallbackEnabled == true &&
+                    currentDisplayMode != PanelDisplayMode.ACTIVE &&
+                    previous != null &&
+                    elapsed in 40L..LIGHT_WAKE_MAX_TRANSITION_MS &&
+                    now - lastLightWakeElapsed >= LIGHT_WAKE_COOLDOWN_MS
+                ) {
+                    val absoluteDelta = kotlin.math.abs(lux - previous)
+                    val relativeDelta = absoluteDelta / kotlin.math.max(previous, 1f)
+                    if (absoluteDelta >= LIGHT_WAKE_MIN_DELTA_LUX && relativeDelta >= LIGHT_WAKE_MIN_RELATIVE_DELTA) {
+                        lastLightWakeElapsed = now
+                        viewModel.onLocalDetection()
+                    }
+                }
             }
             override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) = Unit
         }
@@ -633,3 +678,7 @@ private fun preferredProximitySensor(sensorManager: SensorManager): Sensor? =
         ?: sensorManager.getDefaultSensor(Sensor.TYPE_PROXIMITY)
 
 private const val PROXIMITY_DEBOUNCE_MS = 900L
+private const val LIGHT_WAKE_MAX_TRANSITION_MS = 1_500L
+private const val LIGHT_WAKE_COOLDOWN_MS = 4_000L
+private const val LIGHT_WAKE_MIN_DELTA_LUX = 18f
+private const val LIGHT_WAKE_MIN_RELATIVE_DELTA = 0.55f

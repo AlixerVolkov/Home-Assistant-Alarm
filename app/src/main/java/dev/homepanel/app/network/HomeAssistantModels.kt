@@ -87,7 +87,8 @@ data class AlarmBypassSensor(
 
 data class AlarmBypassRequest(
     val action: AlarmAction,
-    val sensors: List<AlarmBypassSensor>
+    val sensors: List<AlarmBypassSensor>,
+    val preflight: Boolean = false
 )
 
 data class GuestVoucherState(
@@ -137,6 +138,7 @@ data class HomeAssistantConnectionState(
     val guestErrorMessage: String? = null,
     val pendingAction: AlarmAction? = null,
     val bypassRequest: AlarmBypassRequest? = null,
+    val readyToArmModes: Map<String, Boolean> = emptyMap(),
     val pendingGuestVoucher: Boolean = false,
     val pendingGuestVoucherDelete: Boolean = false
 )

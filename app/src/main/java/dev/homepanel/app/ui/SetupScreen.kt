@@ -3,6 +3,12 @@ package dev.homepanel.app.ui
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
+import android.content.IntentFilter
+import android.app.ActivityManager
+import android.os.BatteryManager
+import android.os.Build
+import android.hardware.camera2.CameraCharacteristics
+import android.hardware.camera2.CameraManager
 import android.hardware.Sensor
 import android.hardware.SensorEvent
 import android.hardware.SensorEventListener
@@ -17,12 +23,15 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.Card
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -32,6 +41,7 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Switch
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -85,9 +95,17 @@ fun SetupScreen(
     var entityId by rememberSaveable(initialSettings?.alarmEntityId) {
         mutableStateOf(initialSettings?.alarmEntityId.orEmpty())
     }
-    var wakeEntityId by rememberSaveable(initialSettings?.wakeEntityId) {
-        mutableStateOf(initialSettings?.wakeEntityId.orEmpty())
+    val initialWakeEntityIds = remember(initialSettings) {
+        (initialSettings?.wakeEntityIds.orEmpty() + listOfNotNull(initialSettings?.wakeEntityId))
+            .map(String::trim)
+            .filter(String::isNotBlank)
+            .distinct()
     }
+    var wakeEntityIdsEncoded by rememberSaveable(initialSettings?.wakeEntityIds, initialSettings?.wakeEntityId) {
+        mutableStateOf(initialWakeEntityIds.joinToString("\n"))
+    }
+    var wakeManualEntity by rememberSaveable { mutableStateOf("") }
+    var showHardwareDiagnostics by rememberSaveable { mutableStateOf(false) }
     var saverMinutes by rememberSaveable(initialSettings?.screensaverTimeoutMinutes) {
         mutableStateOf((initialSettings?.screensaverTimeoutMinutes ?: 2).toString())
     }
@@ -96,6 +114,9 @@ fun SetupScreen(
     }
     var proximityWakeEnabled by rememberSaveable(initialSettings?.proximityWakeEnabled) {
         mutableStateOf(initialSettings?.proximityWakeEnabled ?: true)
+    }
+    var lightWakeFallbackEnabled by rememberSaveable(initialSettings?.lightWakeFallbackEnabled) {
+        mutableStateOf(initialSettings?.lightWakeFallbackEnabled ?: false)
     }
     var autoBrightnessEnabled by rememberSaveable(initialSettings?.autoBrightnessEnabled) {
         mutableStateOf(initialSettings?.autoBrightnessEnabled ?: true)
@@ -191,15 +212,22 @@ fun SetupScreen(
     val context = LocalContext.current
     var rtspCopied by rememberSaveable { mutableStateOf(false) }
     var frigateCopied by rememberSaveable { mutableStateOf(false) }
+    val wakeEntityIds = wakeEntityIdsEncoded.lineSequence()
+        .map(String::trim)
+        .filter(String::isNotBlank)
+        .distinct()
+        .toList()
 
     fun draftSettings(): PanelSettings = PanelSettings(
         baseUrl = baseUrl,
         accessToken = token,
         alarmEntityId = entityId,
-        wakeEntityId = wakeEntityId.takeIf { it.isNotBlank() },
+        wakeEntityId = wakeEntityIds.firstOrNull(),
+        wakeEntityIds = wakeEntityIds,
         screensaverTimeoutMinutes = saverMinutes.toIntOrNull() ?: 0,
         sleepTimeoutMinutes = sleepMinutes.toIntOrNull() ?: 0,
         proximityWakeEnabled = proximityWakeEnabled,
+        lightWakeFallbackEnabled = lightWakeFallbackEnabled,
         autoBrightnessEnabled = autoBrightnessEnabled,
         kioskModeEnabled = kioskModeEnabled,
         settingsPin = settingsPin,
@@ -506,19 +534,38 @@ fun SetupScreen(
                     onCheckedChange = { proximityWakeEnabled = it }
                 )
                 ProximitySensorStatus(enabled = proximityWakeEnabled)
+                SettingsSwitchRow(
+                    title = stringResource(R.string.light_wake_fallback_title),
+                    subtitle = stringResource(R.string.light_wake_fallback_subtitle),
+                    checked = lightWakeFallbackEnabled,
+                    onCheckedChange = { lightWakeFallbackEnabled = it }
+                )
 
-                EntityCombo(
-                    selectedId = wakeEntityId,
-                    choices = discoveryState.wakeSensors.map {
-                        it.entityId to buildString {
-                            append(it.friendlyName)
-                            it.deviceClass?.let { deviceClass -> append(" · ").append(deviceClass) }
-                            append(" · ").append(it.state)
+                val wakeChoices = discoveryState.wakeSensors
+                    .sortedWith(
+                        compareBy(
+                            { if (it.entityId.contains("frigate", true) || it.friendlyName.contains("frigate", true)) 0 else 1 },
+                            { if (it.deviceClass in setOf("motion", "occupancy", "presence")) 0 else 1 },
+                            { it.friendlyName.lowercase() }
+                        )
+                    )
+                    .map { sensor ->
+                        sensor.entityId to buildString {
+                            if (sensor.entityId.contains("frigate", true) || sensor.friendlyName.contains("frigate", true)) append("🎥 ")
+                            append(sensor.friendlyName)
+                            sensor.deviceClass?.let { deviceClass -> append(" · ").append(deviceClass) }
+                            append(" · ").append(sensor.state)
                         }
-                    },
-                    emptyLabel = stringResource(R.string.wake_none),
-                    noneLabel = stringResource(R.string.wake_none),
-                    onSelect = { wakeEntityId = it }
+                    }
+                EntityMultiSelect(
+                    selectedIds = wakeEntityIds.toSet(),
+                    choices = wakeChoices,
+                    onSelectionChange = { selected -> wakeEntityIdsEncoded = selected.joinToString("\n") }
+                )
+                Text(
+                    stringResource(R.string.wake_multi_hint),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
                 when {
                     discoveryState.isLoading -> Text(
@@ -538,14 +585,37 @@ fun SetupScreen(
                     )
                 }
 
-                OutlinedTextField(
-                    value = wakeEntityId,
-                    onValueChange = { wakeEntityId = it },
+                Row(
                     modifier = Modifier.fillMaxWidth(),
-                    label = { Text(stringResource(R.string.wake_entity_manual)) },
-                    placeholder = { Text("binary_sensor.hall_motion") },
-                    singleLine = true
-                )
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    OutlinedTextField(
+                        value = wakeManualEntity,
+                        onValueChange = { wakeManualEntity = it },
+                        modifier = Modifier.weight(1f),
+                        label = { Text(stringResource(R.string.wake_entity_manual)) },
+                        placeholder = { Text("binary_sensor.frigate_person") },
+                        singleLine = true
+                    )
+                    OutlinedButton(
+                        onClick = {
+                            val entity = wakeManualEntity.trim()
+                            if (entity.isNotBlank() && entity !in wakeEntityIds) {
+                                wakeEntityIdsEncoded = (wakeEntityIds + entity).joinToString("\n")
+                            }
+                            wakeManualEntity = ""
+                        },
+                        enabled = wakeManualEntity.isNotBlank()
+                    ) { Text(stringResource(R.string.add)) }
+                }
+
+                OutlinedButton(
+                    onClick = { showHardwareDiagnostics = true },
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text(stringResource(R.string.hardware_diagnostics_open))
+                }
 
                 HorizontalDivider()
 
@@ -952,6 +1022,10 @@ fun SetupScreen(
             }
         }
     }
+
+    if (showHardwareDiagnostics) {
+        HardwareDiagnosticsDialog(onDismiss = { showHardwareDiagnostics = false })
+    }
 }
 
 @Composable
@@ -1042,6 +1116,247 @@ private fun EntityCombo(
 }
 
 @Composable
+private fun EntityMultiSelect(
+    selectedIds: Set<String>,
+    choices: List<Pair<String, String>>,
+    onSelectionChange: (Set<String>) -> Unit
+) {
+    var expanded by remember { mutableStateOf(false) }
+    var query by remember { mutableStateOf("") }
+
+    OutlinedButton(
+        onClick = { expanded = true },
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Column(modifier = Modifier.weight(1f), horizontalAlignment = Alignment.Start) {
+            Text(
+                if (selectedIds.isEmpty()) stringResource(R.string.wake_none)
+                else stringResource(R.string.wake_multi_selected, selectedIds.size),
+                style = MaterialTheme.typography.bodyMedium
+            )
+            if (selectedIds.isNotEmpty()) {
+                Text(
+                    selectedIds.take(3).joinToString(" · ") + if (selectedIds.size > 3) " …" else "",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
+        Text("▼")
+    }
+
+    if (expanded) {
+        val knownIds = choices.mapTo(hashSetOf()) { it.first }
+        val allChoices = choices + selectedIds.filter { it !in knownIds }.map { it to it }
+        val filtered = allChoices.filter { (id, label) ->
+            query.isBlank() || id.contains(query, ignoreCase = true) || label.contains(query, ignoreCase = true)
+        }
+
+        AlertDialog(
+            onDismissRequest = { expanded = false },
+            title = { Text(stringResource(R.string.wake_multi_title)) },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedTextField(
+                        value = query,
+                        onValueChange = { query = it },
+                        modifier = Modifier.fillMaxWidth(),
+                        label = { Text(stringResource(R.string.search)) },
+                        placeholder = { Text("Frigate, motion, hall…") },
+                        singleLine = true
+                    )
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .heightIn(max = 430.dp)
+                            .verticalScroll(rememberScrollState()),
+                        verticalArrangement = Arrangement.spacedBy(2.dp)
+                    ) {
+                        filtered.forEach { (entityId, label) ->
+                            val checked = entityId in selectedIds
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable {
+                                        val next = LinkedHashSet(selectedIds)
+                                        if (checked) next.remove(entityId) else next.add(entityId)
+                                        onSelectionChange(next)
+                                    }
+                                    .padding(vertical = 6.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                Checkbox(
+                                    checked = checked,
+                                    onCheckedChange = {
+                                        val next = LinkedHashSet(selectedIds)
+                                        if (checked) next.remove(entityId) else next.add(entityId)
+                                        onSelectionChange(next)
+                                    }
+                                )
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(label, style = MaterialTheme.typography.bodyMedium)
+                                    if (label != entityId) {
+                                        Text(
+                                            entityId,
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                        if (filtered.isEmpty()) {
+                            Text(
+                                stringResource(R.string.no_results),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { expanded = false }) { Text(stringResource(R.string.close)) }
+            },
+            dismissButton = {
+                if (selectedIds.isNotEmpty()) {
+                    TextButton(onClick = { onSelectionChange(emptySet()) }) {
+                        Text(stringResource(R.string.clear_selection))
+                    }
+                }
+            }
+        )
+    }
+}
+
+@Composable
+private fun HardwareDiagnosticsDialog(onDismiss: () -> Unit) {
+    val context = LocalContext.current
+    val sensorManager = remember(context) {
+        context.getSystemService(Context.SENSOR_SERVICE) as SensorManager
+    }
+    val proximity = remember(sensorManager) {
+        sensorManager.getDefaultSensor(Sensor.TYPE_PROXIMITY, true)
+            ?: sensorManager.getDefaultSensor(Sensor.TYPE_PROXIMITY, false)
+            ?: sensorManager.getDefaultSensor(Sensor.TYPE_PROXIMITY)
+    }
+    val light = remember(sensorManager) { sensorManager.getDefaultSensor(Sensor.TYPE_LIGHT) }
+    val totalSensors = remember(sensorManager) { sensorManager.getSensorList(Sensor.TYPE_ALL).size }
+    val cameraSummary = remember(context) {
+        runCatching {
+            val manager = context.getSystemService(Context.CAMERA_SERVICE) as CameraManager
+            var front = 0
+            var back = 0
+            manager.cameraIdList.forEach { id ->
+                when (manager.getCameraCharacteristics(id).get(CameraCharacteristics.LENS_FACING)) {
+                    CameraCharacteristics.LENS_FACING_FRONT -> front++
+                    CameraCharacteristics.LENS_FACING_BACK -> back++
+                }
+            }
+            Triple(manager.cameraIdList.size, front, back)
+        }.getOrDefault(Triple(0, 0, 0))
+    }
+    val batteryPercent = remember(context) {
+        val battery = context.getSystemService(Context.BATTERY_SERVICE) as BatteryManager
+        battery.getIntProperty(BatteryManager.BATTERY_PROPERTY_CAPACITY)
+    }
+    val charging = remember(context) {
+        val intent = context.registerReceiver(null, IntentFilter(android.content.Intent.ACTION_BATTERY_CHANGED))
+        val status = intent?.getIntExtra(BatteryManager.EXTRA_STATUS, -1) ?: -1
+        status == BatteryManager.BATTERY_STATUS_CHARGING || status == BatteryManager.BATTERY_STATUS_FULL
+    }
+    val memoryText = remember(context) {
+        runCatching {
+            val manager = context.getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
+            val info = ActivityManager.MemoryInfo()
+            manager.getMemoryInfo(info)
+            val mb = info.availMem / (1024L * 1024L)
+            "$mb MB"
+        }.getOrDefault("—")
+    }
+
+    var proximityEvents by remember { mutableStateOf(0) }
+    var proximityDistance by remember { mutableStateOf<Float?>(null) }
+    var lightEvents by remember { mutableStateOf(0) }
+    var lux by remember { mutableStateOf<Float?>(null) }
+
+    DisposableEffect(proximity, light) {
+        val listener = object : SensorEventListener {
+            override fun onSensorChanged(event: SensorEvent) {
+                when (event.sensor.type) {
+                    Sensor.TYPE_PROXIMITY -> {
+                        proximityDistance = event.values.firstOrNull()
+                        proximityEvents += 1
+                    }
+                    Sensor.TYPE_LIGHT -> {
+                        lux = event.values.firstOrNull()
+                        lightEvents += 1
+                    }
+                }
+            }
+            override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) = Unit
+        }
+        if (proximity != null) runCatching {
+            sensorManager.registerListener(listener, proximity, SensorManager.SENSOR_DELAY_UI)
+        }
+        if (light != null) runCatching {
+            sensorManager.registerListener(listener, light, SensorManager.SENSOR_DELAY_NORMAL)
+        }
+        onDispose { runCatching { sensorManager.unregisterListener(listener) } }
+    }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(R.string.hardware_diagnostics_title)) },
+        text = {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(max = 560.dp)
+                    .verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                Text("${Build.MANUFACTURER} ${Build.MODEL}", style = MaterialTheme.typography.titleSmall)
+                Text("Android ${Build.VERSION.RELEASE} · SDK ${Build.VERSION.SDK_INT}")
+                HorizontalDivider()
+                Text(stringResource(R.string.hardware_sensors_total, totalSensors))
+                Text(
+                    stringResource(
+                        R.string.hardware_proximity_line,
+                        proximity?.name ?: stringResource(R.string.not_available),
+                        proximityEvents,
+                        proximityDistance?.let { "%.2f cm".format(it) } ?: "—"
+                    )
+                )
+                Text(
+                    stringResource(
+                        R.string.hardware_light_line,
+                        light?.name ?: stringResource(R.string.not_available),
+                        lightEvents,
+                        lux?.let { "%.1f lx".format(it) } ?: "—"
+                    )
+                )
+                HorizontalDivider()
+                Text(stringResource(R.string.hardware_camera_line, cameraSummary.first, cameraSummary.second, cameraSummary.third))
+                Text(stringResource(R.string.hardware_battery_line, batteryPercent, if (charging) stringResource(R.string.yes) else stringResource(R.string.no)))
+                Text(stringResource(R.string.hardware_memory_line, memoryText))
+                if (proximityEvents == 0) {
+                    Text(
+                        stringResource(R.string.hardware_proximity_no_events_hint),
+                        color = MaterialTheme.colorScheme.error,
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) { Text(stringResource(R.string.close)) }
+        }
+    )
+}
+
+@Composable
 private fun ProximitySensorStatus(enabled: Boolean) {
     val context = LocalContext.current
     val sensorManager = remember(context) {
@@ -1055,6 +1370,7 @@ private fun ProximitySensorStatus(enabled: Boolean) {
     var registered by remember(sensor, enabled) { mutableStateOf(false) }
     var lastDistance by remember(sensor, enabled) { mutableStateOf<Float?>(null) }
     var near by remember(sensor, enabled) { mutableStateOf<Boolean?>(null) }
+    var eventCount by remember(sensor, enabled) { mutableStateOf(0) }
 
     DisposableEffect(sensor, enabled) {
         if (!enabled || sensor == null) {
@@ -1067,6 +1383,7 @@ private fun ProximitySensorStatus(enabled: Boolean) {
                 val maxRange = event.sensor.maximumRange.takeIf { it > 0f } ?: 5f
                 lastDistance = distance
                 near = distance >= 0f && distance < maxRange
+                eventCount += 1
             }
 
             override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) = Unit
@@ -1106,6 +1423,15 @@ private fun ProximitySensorStatus(enabled: Boolean) {
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
+                if (sensor.name.contains("Palm Proximity", ignoreCase = true) ||
+                    sensor.vendor.contains("Samsung", ignoreCase = true) && sensor.name.contains("Proximity", ignoreCase = true)
+                ) {
+                    Text(
+                        stringResource(R.string.proximity_sensor_samsung_palm_warning),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.error
+                    )
+                }
                 val stateText = when {
                     !enabled -> stringResource(R.string.proximity_sensor_disabled)
                     !registered -> stringResource(R.string.proximity_sensor_registration_failed)
@@ -1121,6 +1447,11 @@ private fun ProximitySensorStatus(enabled: Boolean) {
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
+                Text(
+                    stringResource(R.string.proximity_sensor_events, eventCount),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
             }
         }
     }

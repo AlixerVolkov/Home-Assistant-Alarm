@@ -486,7 +486,13 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             baseUrl = draft.baseUrl.trim(),
             accessToken = draft.accessToken.trim(),
             alarmEntityId = draft.alarmEntityId.trim(),
-            wakeEntityId = draft.wakeEntityId?.trim()?.takeIf { it.isNotBlank() },
+            wakeEntityIds = (draft.wakeEntityIds + listOfNotNull(draft.wakeEntityId))
+                .map(String::trim)
+                .filter(String::isNotBlank)
+                .distinct(),
+            wakeEntityId = (draft.wakeEntityIds + listOfNotNull(draft.wakeEntityId))
+                .map(String::trim)
+                .firstOrNull(String::isNotBlank),
             screensaverTimeoutMinutes = normalizedSaver,
             sleepTimeoutMinutes = normalizedSleep,
             settingsPin = draft.settingsPin.trim().filter(Char::isDigit).take(8),
@@ -808,7 +814,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 baseUrl = settings.baseUrl,
                 token = settings.accessToken,
                 entityId = settings.alarmEntityId,
-                wakeEntityId = settings.wakeEntityId,
+                wakeEntityIds = (settings.wakeEntityIds + listOfNotNull(settings.wakeEntityId)).distinct(),
                 guestVoucherSensorEntityId = settings.guestVoucherSensorEntityId,
                 guestCreateButtonEntityId = settings.guestCreateButtonEntityId,
                 guestDeleteButtonEntityId = settings.guestDeleteButtonEntityId

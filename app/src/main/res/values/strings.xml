@@ -246,4 +246,32 @@
     <string name="alarm_bypass_note">Bypassed sensors are temporarily ignored by Alarmo until the alarm is disarmed.</string>
     <string name="alarm_bypass_confirm">Bypass and arm</string>
     <string name="alarm_bypass_retry">Retry</string>
+    <string name="light_wake_fallback_title">Use ambient-light wave fallback</string>
+    <string name="light_wake_fallback_subtitle">Wake when the light sensor detects a fast, large change. Useful on Samsung Palm Proximity devices; sudden room lighting changes can also wake the panel.</string>
+    <string name="proximity_sensor_samsung_palm_warning">This is a Samsung Palm Proximity virtual sensor. Third-party apps may not receive normal distance events. Cover the upper display with your palm to test it; enable the light-sensor fallback if needed.</string>
+    <string name="proximity_sensor_events">Sensor events received: %1$d</string>
+
+    <string name="wake_multi_title">Wake sensors</string>
+    <string name="wake_multi_selected">%1$d wake sensors selected</string>
+    <string name="wake_multi_hint">Select one or more Home Assistant sensors. Search for Frigate directly; Frigate, motion, occupancy and presence sensors are prioritised.</string>
+    <string name="search">Search</string>
+    <string name="no_results">No matching entities</string>
+    <string name="clear_selection">Clear selection</string>
+    <string name="add">Add</string>
+    <string name="hardware_diagnostics_open">Open hardware diagnostics</string>
+    <string name="hardware_diagnostics_title">Hardware diagnostics</string>
+    <string name="hardware_sensors_total">Android sensors detected: %1$d</string>
+    <string name="hardware_proximity_line">Proximity: %1$s · events %2$d · value %3$s</string>
+    <string name="hardware_light_line">Ambient light: %1$s · events %2$d · value %3$s</string>
+    <string name="hardware_camera_line">Cameras: %1$d total · %2$d front · %3$d back</string>
+    <string name="hardware_battery_line">Battery: %1$d%% · charging: %2$s</string>
+    <string name="hardware_memory_line">Available memory: %1$s</string>
+    <string name="hardware_proximity_no_events_hint">No proximity events have been received in this diagnostic session. If covering the sensor does not increase the counter, Android is not exposing useful events to HomePanel.</string>
+    <string name="not_available">Not available</string>
+    <string name="alarm_preflight_title">Arming pre-check</string>
+    <string name="alarm_preflight_message">Alarmo reports that %1$s is not ready to arm. HomePanel detected this before sending the command.</string>
+    <string name="alarm_preflight_no_sensor_names">Alarmo readiness does not include the exact blocking sensor names until an arm attempt fails. You can close open doors/windows, try normal arming, or bypass the blocking sensors.</string>
+    <string name="alarm_preflight_try_normal">Arm normally</string>
+    <string name="alarm_ready">Ready</string>
+    <string name="alarm_not_ready">Not ready</string>
 </resources>

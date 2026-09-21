@@ -1,6 +1,6 @@
-> Current release: **0.6.12** (`versionCode 23`)
+> Current release: **0.6.14** (`versionCode 24`)
 
-> Current version: **0.6.11**
+> Current version: **0.6.14**
 
 # HomePanel v0.6.10
 

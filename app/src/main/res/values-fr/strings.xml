@@ -187,4 +187,32 @@
     <string name="alarm_bypass_note">Les capteurs contournés sont temporairement ignorés par Alarmo jusqu’au désarmement de l’alarme.</string>
     <string name="alarm_bypass_confirm">Contourner et armer</string>
     <string name="alarm_bypass_retry">Réessayer</string>
+    <string name="light_wake_fallback_title">Utiliser la variation de lumière comme secours</string>
+    <string name="light_wake_fallback_subtitle">Réveille le panneau quand le capteur de lumière détecte une variation rapide et importante. Utile avec Samsung Palm Proximity ; un changement brusque d’éclairage peut aussi réveiller le panneau.</string>
+    <string name="proximity_sensor_samsung_palm_warning">Il s’agit d’un capteur virtuel Samsung Palm Proximity. Les applications tierces peuvent ne pas recevoir de vrais événements de distance. Couvrez le haut de l’écran avec la paume pour le tester ; activez le secours par lumière si nécessaire.</string>
+    <string name="proximity_sensor_events">Événements du capteur reçus : %1$d</string>
+
+    <string name="wake_multi_title">Capteurs de réveil</string>
+    <string name="wake_multi_selected">%1$d capteurs de réveil sélectionnés</string>
+    <string name="wake_multi_hint">Sélectionnez un ou plusieurs capteurs Home Assistant. Vous pouvez rechercher Frigate directement ; Frigate, mouvement, occupation et présence sont prioritaires.</string>
+    <string name="search">Rechercher</string>
+    <string name="no_results">Aucune entité correspondante</string>
+    <string name="clear_selection">Effacer la sélection</string>
+    <string name="add">Ajouter</string>
+    <string name="hardware_diagnostics_open">Ouvrir le diagnostic matériel</string>
+    <string name="hardware_diagnostics_title">Diagnostic matériel</string>
+    <string name="hardware_sensors_total">Capteurs Android détectés : %1$d</string>
+    <string name="hardware_proximity_line">Proximité : %1$s · événements %2$d · valeur %3$s</string>
+    <string name="hardware_light_line">Lumière ambiante : %1$s · événements %2$d · valeur %3$s</string>
+    <string name="hardware_camera_line">Caméras : %1$d au total · %2$d avant · %3$d arrière</string>
+    <string name="hardware_battery_line">Batterie : %1$d%% · en charge : %2$s</string>
+    <string name="hardware_memory_line">Mémoire disponible : %1$s</string>
+    <string name="hardware_proximity_no_events_hint">Aucun événement de proximité reçu pendant ce diagnostic. Si le compteur ne change pas lorsque vous couvrez le capteur, Android ne fournit pas des événements utiles à HomePanel.</string>
+    <string name="not_available">Indisponible</string>
+    <string name="alarm_preflight_title">Vérification avant armement</string>
+    <string name="alarm_preflight_message">Alarmo indique que %1$s ne peut pas encore être armé. HomePanel l a détecté avant envoi de la commande.</string>
+    <string name="alarm_preflight_no_sensor_names">L état de préparation Alarmo ne fournit pas les noms exacts des capteurs bloquants avant un échec d armement. Vous pouvez fermer les ouvertures, essayer un armement normal ou contourner les capteurs bloquants.</string>
+    <string name="alarm_preflight_try_normal">Armer normalement</string>
+    <string name="alarm_ready">Prêt</string>
+    <string name="alarm_not_ready">Non prêt</string>
 </resources>

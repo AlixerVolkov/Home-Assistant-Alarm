@@ -192,4 +192,32 @@
     <string name="alarm_bypass_note">Omzeilde sensoren worden tijdelijk door Alarmo genegeerd totdat het alarm wordt uitgeschakeld.</string>
     <string name="alarm_bypass_confirm">Omzeilen en inschakelen</string>
     <string name="alarm_bypass_retry">Opnieuw proberen</string>
+    <string name="light_wake_fallback_title">Lichtverandering als fallback gebruiken</string>
+    <string name="light_wake_fallback_subtitle">Wekt het paneel wanneer de lichtsensor een snelle, grote verandering detecteert. Handig bij Samsung Palm Proximity; plotselinge verlichting kan het paneel ook wekken.</string>
+    <string name="proximity_sensor_samsung_palm_warning">Dit is een virtuele Samsung Palm Proximity-sensor. Apps van derden krijgen mogelijk geen normale afstandsgebeurtenissen. Bedek de bovenkant van het scherm met uw handpalm om te testen; schakel zo nodig de lichtsensor-fallback in.</string>
+    <string name="proximity_sensor_events">Ontvangen sensorgebeurtenissen: %1$d</string>
+
+    <string name="wake_multi_title">Weksensoren</string>
+    <string name="wake_multi_selected">%1$d weksensoren geselecteerd</string>
+    <string name="wake_multi_hint">Selecteer een of meer Home Assistant-sensoren. Je kunt rechtstreeks op Frigate zoeken; Frigate, beweging, bezetting en aanwezigheid krijgen voorrang.</string>
+    <string name="search">Zoeken</string>
+    <string name="no_results">Geen overeenkomende entiteiten</string>
+    <string name="clear_selection">Selectie wissen</string>
+    <string name="add">Toevoegen</string>
+    <string name="hardware_diagnostics_open">Hardwarediagnose openen</string>
+    <string name="hardware_diagnostics_title">Hardwarediagnose</string>
+    <string name="hardware_sensors_total">Gedetecteerde Android-sensoren: %1$d</string>
+    <string name="hardware_proximity_line">Nabijheid: %1$s · gebeurtenissen %2$d · waarde %3$s</string>
+    <string name="hardware_light_line">Omgevingslicht: %1$s · gebeurtenissen %2$d · waarde %3$s</string>
+    <string name="hardware_camera_line">Camera s: %1$d totaal · %2$d voor · %3$d achter</string>
+    <string name="hardware_battery_line">Batterij: %1$d%% · laden: %2$s</string>
+    <string name="hardware_memory_line">Beschikbaar geheugen: %1$s</string>
+    <string name="hardware_proximity_no_events_hint">Tijdens deze diagnose zijn geen nabijheidsgebeurtenissen ontvangen. Als de teller niet stijgt wanneer je de sensor bedekt, levert Android geen bruikbare gebeurtenissen aan HomePanel.</string>
+    <string name="not_available">Niet beschikbaar</string>
+    <string name="alarm_preflight_title">Controle vóór inschakelen</string>
+    <string name="alarm_preflight_message">Alarmo meldt dat %1$s nog niet klaar is om in te schakelen. HomePanel zag dit voordat de opdracht werd verzonden.</string>
+    <string name="alarm_preflight_no_sensor_names">De gereedheidsstatus van Alarmo bevat vóór een mislukte inschakelpoging niet de exacte namen van blokkerende sensoren. Sluit open deuren/ramen, probeer normaal in te schakelen of omzeil de blokkerende sensoren.</string>
+    <string name="alarm_preflight_try_normal">Normaal inschakelen</string>
+    <string name="alarm_ready">Klaar</string>
+    <string name="alarm_not_ready">Niet klaar</string>
 </resources>

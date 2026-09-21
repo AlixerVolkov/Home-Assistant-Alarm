@@ -110,3 +110,20 @@ RTSP/MQTT are lazy, a persistent Java/Kotlin crash report is installed, and the 
 
 ## v0.6.12
 - Alarmo failed-arm dialog with user-confirmed force bypass (`force: true`).
+
+
+## v0.6.13
+
+- Alarmo context_id is now an integer.
+- Proximity wakes on NEAR or a real transition and diagnostics count events.
+- Optional ambient-light wave-to-wake fallback for Samsung Palm Proximity devices.
+
+## 0.6.14
+
+- Multiple Home Assistant wake entities with searchable multi-select; all selected `binary_sensor.*` entities can wake HomePanel.
+- Frigate/person-related entities are prioritized in the wake selector and can also be added manually.
+- Added hardware diagnostics dialog for Android sensors, proximity/light event counters, cameras, battery and available memory.
+- Added Alarmo pre-arm readiness monitoring via `alarmo_ready_to_arm_modes_updated`.
+- Arming buttons show ready/not-ready when Alarmo has provided readiness data.
+- If a requested arm mode is known not ready, HomePanel warns before sending the command and offers normal arm, force/bypass, or cancel.
+- Existing single wake sensor setting is migrated automatically to the new multi-select storage.

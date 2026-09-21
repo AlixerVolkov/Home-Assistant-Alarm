@@ -10,6 +10,7 @@ import dev.homepanel.app.security.CryptoManager
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.map
+import org.json.JSONArray
 
 private val Context.panelDataStore by preferencesDataStore(name = "home_panel_settings")
 
@@ -30,10 +31,12 @@ class SettingsRepository(
                 baseUrl = baseUrl,
                 accessToken = token,
                 alarmEntityId = alarmEntityId,
-                wakeEntityId = preferences[KEY_WAKE_ENTITY]?.takeIf { it.isNotBlank() },
+                wakeEntityId = readWakeEntityIds(preferences[KEY_WAKE_ENTITIES], preferences[KEY_WAKE_ENTITY]).firstOrNull(),
+                wakeEntityIds = readWakeEntityIds(preferences[KEY_WAKE_ENTITIES], preferences[KEY_WAKE_ENTITY]),
                 screensaverTimeoutMinutes = preferences[KEY_SCREENSAVER_MINUTES] ?: 2,
                 sleepTimeoutMinutes = preferences[KEY_SLEEP_MINUTES] ?: 10,
                 proximityWakeEnabled = preferences[KEY_PROXIMITY_WAKE] ?: true,
+                lightWakeFallbackEnabled = preferences[KEY_LIGHT_WAKE_FALLBACK] ?: false,
                 autoBrightnessEnabled = preferences[KEY_AUTO_BRIGHTNESS] ?: true,
                 kioskModeEnabled = preferences[KEY_KIOSK_MODE] ?: false,
                 settingsPin = preferences[KEY_SETTINGS_PIN]
@@ -71,10 +74,16 @@ class SettingsRepository(
             preferences[KEY_BASE_URL] = settings.baseUrl.trim().trimEnd('/')
             preferences[KEY_ACCESS_TOKEN] = cryptoManager.encrypt(settings.accessToken.trim())
             preferences[KEY_ALARM_ENTITY] = settings.alarmEntityId.trim()
-            preferences[KEY_WAKE_ENTITY] = settings.wakeEntityId?.trim().orEmpty()
+            val wakeIds = (settings.wakeEntityIds + listOfNotNull(settings.wakeEntityId))
+                .map(String::trim)
+                .filter(String::isNotBlank)
+                .distinct()
+            preferences[KEY_WAKE_ENTITY] = wakeIds.firstOrNull().orEmpty()
+            preferences[KEY_WAKE_ENTITIES] = JSONArray(wakeIds).toString()
             preferences[KEY_SCREENSAVER_MINUTES] = settings.screensaverTimeoutMinutes.coerceAtLeast(0)
             preferences[KEY_SLEEP_MINUTES] = settings.sleepTimeoutMinutes.coerceAtLeast(0)
             preferences[KEY_PROXIMITY_WAKE] = settings.proximityWakeEnabled
+            preferences[KEY_LIGHT_WAKE_FALLBACK] = settings.lightWakeFallbackEnabled
             preferences[KEY_AUTO_BRIGHTNESS] = settings.autoBrightnessEnabled
             preferences[KEY_KIOSK_MODE] = settings.kioskModeEnabled
             if (settings.settingsPin.isBlank()) {
@@ -111,9 +120,11 @@ class SettingsRepository(
             preferences.remove(KEY_ACCESS_TOKEN)
             preferences.remove(KEY_ALARM_ENTITY)
             preferences.remove(KEY_WAKE_ENTITY)
+            preferences.remove(KEY_WAKE_ENTITIES)
             preferences.remove(KEY_SCREENSAVER_MINUTES)
             preferences.remove(KEY_SLEEP_MINUTES)
             preferences.remove(KEY_PROXIMITY_WAKE)
+            preferences.remove(KEY_LIGHT_WAKE_FALLBACK)
             preferences.remove(KEY_AUTO_BRIGHTNESS)
             preferences.remove(KEY_KIOSK_MODE)
             preferences.remove(KEY_SETTINGS_PIN)
@@ -136,14 +147,28 @@ class SettingsRepository(
         }
     }
 
+    private fun readWakeEntityIds(json: String?, legacy: String?): List<String> {
+        val parsed = runCatching {
+            val array = JSONArray(json.orEmpty())
+            buildList {
+                for (index in 0 until array.length()) {
+                    array.optString(index).trim().takeIf(String::isNotBlank)?.let(::add)
+                }
+            }
+        }.getOrDefault(emptyList())
+        return (parsed + listOfNotNull(legacy?.trim()?.takeIf(String::isNotBlank))).distinct()
+    }
+
     companion object {
         private val KEY_BASE_URL = stringPreferencesKey("base_url")
         private val KEY_ACCESS_TOKEN = stringPreferencesKey("access_token")
         private val KEY_ALARM_ENTITY = stringPreferencesKey("alarm_entity_id")
         private val KEY_WAKE_ENTITY = stringPreferencesKey("wake_entity_id")
+        private val KEY_WAKE_ENTITIES = stringPreferencesKey("wake_entity_ids_json")
         private val KEY_SCREENSAVER_MINUTES = intPreferencesKey("screensaver_minutes")
         private val KEY_SLEEP_MINUTES = intPreferencesKey("sleep_minutes")
         private val KEY_PROXIMITY_WAKE = booleanPreferencesKey("proximity_wake")
+        private val KEY_LIGHT_WAKE_FALLBACK = booleanPreferencesKey("light_wake_fallback")
         private val KEY_AUTO_BRIGHTNESS = booleanPreferencesKey("auto_brightness")
         private val KEY_KIOSK_MODE = booleanPreferencesKey("kiosk_mode")
         private val KEY_SETTINGS_PIN = stringPreferencesKey("settings_pin")

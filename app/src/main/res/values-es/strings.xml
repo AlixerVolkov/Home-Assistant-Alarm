@@ -246,4 +246,32 @@
     <string name="alarm_bypass_note">Los sensores omitidos quedan temporalmente ignorados por Alarmo hasta que se desarme la alarma.</string>
     <string name="alarm_bypass_confirm">Bypass y armar</string>
     <string name="alarm_bypass_retry">Reintentar</string>
+    <string name="light_wake_fallback_title">Usar cambio de luz como alternativa</string>
+    <string name="light_wake_fallback_subtitle">Despierta cuando el sensor de luz detecta un cambio rápido y grande. Útil con Samsung Palm Proximity; cambios bruscos de iluminación también pueden despertar el panel.</string>
+    <string name="proximity_sensor_samsung_palm_warning">Este es un sensor virtual Samsung Palm Proximity. Las apps de terceros pueden no recibir eventos normales de distancia. Cubre la parte superior de la pantalla con la palma para probarlo; activa la alternativa por luz si hace falta.</string>
+    <string name="proximity_sensor_events">Eventos del sensor recibidos: %1$d</string>
+
+    <string name="wake_multi_title">Sensores para despertar</string>
+    <string name="wake_multi_selected">%1$d sensores de despertar seleccionados</string>
+    <string name="wake_multi_hint">Selecciona uno o varios sensores de Home Assistant. Puedes buscar Frigate directamente; se priorizan Frigate, movimiento, ocupación y presencia.</string>
+    <string name="search">Buscar</string>
+    <string name="no_results">No hay entidades coincidentes</string>
+    <string name="clear_selection">Borrar selección</string>
+    <string name="add">Añadir</string>
+    <string name="hardware_diagnostics_open">Abrir diagnóstico de hardware</string>
+    <string name="hardware_diagnostics_title">Diagnóstico de hardware</string>
+    <string name="hardware_sensors_total">Sensores Android detectados: %1$d</string>
+    <string name="hardware_proximity_line">Proximidad: %1$s · eventos %2$d · valor %3$s</string>
+    <string name="hardware_light_line">Luz ambiental: %1$s · eventos %2$d · valor %3$s</string>
+    <string name="hardware_camera_line">Cámaras: %1$d total · %2$d frontal · %3$d trasera</string>
+    <string name="hardware_battery_line">Batería: %1$d%% · cargando: %2$s</string>
+    <string name="hardware_memory_line">Memoria disponible: %1$s</string>
+    <string name="hardware_proximity_no_events_hint">No se han recibido eventos de proximidad durante este diagnóstico. Si al cubrir el sensor el contador no aumenta, Android no está exponiendo eventos útiles a HomePanel.</string>
+    <string name="not_available">No disponible</string>
+    <string name="alarm_preflight_title">Comprobación antes de armar</string>
+    <string name="alarm_preflight_message">Alarmo indica que %1$s no está listo para armar. HomePanel lo ha detectado antes de enviar la orden.</string>
+    <string name="alarm_preflight_no_sensor_names">El estado de preparación de Alarmo no incluye los nombres exactos de los sensores bloqueantes hasta que falla un intento de armado. Puedes cerrar puertas/ventanas abiertas, intentar armar normalmente o hacer bypass de los sensores bloqueantes.</string>
+    <string name="alarm_preflight_try_normal">Armar normalmente</string>
+    <string name="alarm_ready">Listo</string>
+    <string name="alarm_not_ready">No listo</string>
 </resources>

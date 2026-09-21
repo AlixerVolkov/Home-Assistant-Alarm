@@ -37,7 +37,7 @@ class HomeAssistantWebSocket(
     private var webSocket: WebSocket? = null
     private var accessToken: String = ""
     private var alarmEntityId: String = ""
-    private var wakeEntityId: String? = null
+    private var wakeEntityIds: Set<String> = emptySet()
     private var guestVoucherSensorEntityId: String? = null
     private var guestCreateButtonEntityId: String? = null
     private var guestDeleteButtonEntityId: String? = null
@@ -49,7 +49,7 @@ class HomeAssistantWebSocket(
         baseUrl: String,
         token: String,
         entityId: String,
-        wakeEntityId: String? = null,
+        wakeEntityIds: Collection<String> = emptyList(),
         guestVoucherSensorEntityId: String? = null,
         guestCreateButtonEntityId: String? = null,
         guestDeleteButtonEntityId: String? = null
@@ -57,7 +57,7 @@ class HomeAssistantWebSocket(
         disconnect()
         accessToken = token.trim()
         alarmEntityId = entityId.trim()
-        this.wakeEntityId = wakeEntityId?.trim()?.takeIf { it.isNotBlank() }
+        this.wakeEntityIds = wakeEntityIds.map(String::trim).filter(String::isNotBlank).toSet()
         this.guestVoucherSensorEntityId = guestVoucherSensorEntityId?.trim()?.takeIf { it.isNotBlank() }
         this.guestCreateButtonEntityId = guestCreateButtonEntityId?.trim()?.takeIf { it.isNotBlank() }
         this.guestDeleteButtonEntityId = guestDeleteButtonEntityId?.trim()?.takeIf { it.isNotBlank() }
@@ -90,14 +90,19 @@ class HomeAssistantWebSocket(
 
     fun retryFailedAlarmoArm(forceBypass: Boolean) {
         val action = lastAlarmoArmAction ?: return
-        performActionInternal(action, lastAlarmoArmCode, forceBypass = forceBypass)
+        performActionInternal(action, lastAlarmoArmCode, forceBypass = forceBypass, skipPreflight = true)
     }
 
     fun dismissAlarmBypassRequest() {
         _state.value = _state.value.copy(bypassRequest = null)
     }
 
-    private fun performActionInternal(action: AlarmAction, code: String?, forceBypass: Boolean) {
+    private fun performActionInternal(
+        action: AlarmAction,
+        code: String?,
+        forceBypass: Boolean,
+        skipPreflight: Boolean = false
+    ) {
         val socket = authenticatedSocket() ?: return
 
         val alarm = _state.value.alarm
@@ -117,17 +122,37 @@ class HomeAssistantWebSocket(
             return
         }
 
-        val requestId = nextId.getAndIncrement()
-        actionRequestIds[requestId] = action
-
         val isAlarmoArm = alarm?.isAlarmo == true && action != AlarmAction.DISARM
         if (isAlarmoArm) {
             lastAlarmoArmAction = action
             lastAlarmoArmCode = code
+
+            val readiness = _state.value.readyToArmModes[action.targetState]
+            if (!forceBypass && !skipPreflight && readiness == false) {
+                val knownSensors = alarm.openSensors.map { entityId ->
+                    AlarmBypassSensor(
+                        entityId = entityId,
+                        friendlyName = entityFriendlyNames[entityId] ?: entityId
+                    )
+                }
+                _state.value = _state.value.copy(
+                    actionErrorMessage = null,
+                    pendingAction = null,
+                    bypassRequest = AlarmBypassRequest(
+                        action = action,
+                        sensors = knownSensors,
+                        preflight = true
+                    )
+                )
+                return
+            }
         } else if (action == AlarmAction.DISARM) {
             lastAlarmoArmAction = null
             lastAlarmoArmCode = null
         }
+
+        val requestId = nextId.getAndIncrement()
+        actionRequestIds[requestId] = action
 
         val payload = if (isAlarmoArm) {
             buildAlarmoActionPayload(requestId, action, code, forceBypass)
@@ -345,6 +370,15 @@ class HomeAssistantWebSocket(
                 .put("event_type", "alarmo_failed_to_arm")
                 .toString()
         )
+
+        // Alarmo publishes a per-mode readiness prediction before arming.
+        socket.send(
+            JSONObject()
+                .put("id", nextId.getAndIncrement())
+                .put("type", "subscribe_events")
+                .put("event_type", "alarmo_ready_to_arm_modes_updated")
+                .toString()
+        )
     }
 
     private fun handleResult(message: JSONObject) {
@@ -439,6 +473,11 @@ class HomeAssistantWebSocket(
             return
         }
 
+        if (eventType == "alarmo_ready_to_arm_modes_updated") {
+            handleAlarmoReadyToArmModes(data)
+            return
+        }
+
         if (eventType != "state_changed") return
 
         val entityId = data.optString("entity_id")
@@ -457,7 +496,7 @@ class HomeAssistantWebSocket(
             _entityEvents.tryEmit(HomeEntityEvent(entityId, friendlyName, newValue, deviceClass))
         }
 
-        if (entityId == wakeEntityId && isDetectionState(newValue)) {
+        if (entityId in wakeEntityIds && isDetectionState(newValue)) {
             _wakeEvents.tryEmit(Unit)
         }
 
@@ -503,6 +542,19 @@ class HomeAssistantWebSocket(
         if (parsed.state in WAKE_ALARM_STATES) {
             _wakeEvents.tryEmit(Unit)
         }
+    }
+
+    private fun handleAlarmoReadyToArmModes(data: JSONObject) {
+        val eventEntityId = data.optString("entity_id")
+        if (eventEntityId.isNotBlank() && eventEntityId != alarmEntityId) return
+
+        val updated = _state.value.readyToArmModes.toMutableMap()
+        AlarmAction.values().filter { it != AlarmAction.DISARM }.forEach { action ->
+            if (data.has(action.targetState)) {
+                updated[action.targetState] = data.optBoolean(action.targetState)
+            }
+        }
+        _state.value = _state.value.copy(readyToArmModes = updated)
     }
 
     private fun handleAlarmoFailedToArm(data: JSONObject) {
@@ -568,7 +620,7 @@ class HomeAssistantWebSocket(
     ): JSONObject {
         val serviceData = JSONObject()
             .put("entity_id", alarmEntityId)
-            .put("context_id", "homepanel-$requestId")
+            .put("context_id", requestId)
 
         serviceData.put("mode", action.alarmoMode ?: error("Missing Alarmo arm mode"))
         val service = "arm"

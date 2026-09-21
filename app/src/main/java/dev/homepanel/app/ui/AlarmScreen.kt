@@ -311,10 +311,28 @@ private fun AlarmBypassDialog(
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text(stringResource(R.string.alarm_bypass_title)) },
+        title = {
+            Text(
+                stringResource(
+                    if (request.preflight) R.string.alarm_preflight_title else R.string.alarm_bypass_title
+                )
+            )
+        },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                Text(stringResource(R.string.alarm_bypass_message, alarmActionLabel(request.action)))
+                Text(
+                    stringResource(
+                        if (request.preflight) R.string.alarm_preflight_message else R.string.alarm_bypass_message,
+                        alarmActionLabel(request.action)
+                    )
+                )
+                if (request.preflight && request.sensors.isEmpty()) {
+                    Text(
+                        stringResource(R.string.alarm_preflight_no_sensor_names),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
                 request.sensors.forEach { sensor ->
                     Column {
                         Text(
@@ -344,7 +362,13 @@ private fun AlarmBypassDialog(
         },
         dismissButton = {
             Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                TextButton(onClick = onRetry) { Text(stringResource(R.string.alarm_bypass_retry)) }
+                TextButton(onClick = onRetry) {
+                    Text(
+                        stringResource(
+                            if (request.preflight) R.string.alarm_preflight_try_normal else R.string.alarm_bypass_retry
+                        )
+                    )
+                }
                 TextButton(onClick = onDismiss) { Text(stringResource(R.string.cancel)) }
             }
         }
@@ -1229,6 +1253,7 @@ private fun AlarmActionsPanel(
                             action = action,
                             active = active,
                             enabled = enabled,
+                            readiness = if (action == AlarmAction.DISARM) null else connectionState.readyToArmModes[action.targetState],
                             modifier = Modifier
                                 .weight(1f)
                                 .height(if (compact) 88.dp else 110.dp),
@@ -1247,6 +1272,7 @@ private fun AlarmActionButton(
     action: AlarmAction,
     active: Boolean,
     enabled: Boolean,
+    readiness: Boolean? = null,
     modifier: Modifier = Modifier,
     onClick: () -> Unit
 ) {
@@ -1279,6 +1305,12 @@ private fun AlarmActionButton(
             )
             if (active) {
                 Text(stringResource(R.string.current_mode), style = MaterialTheme.typography.labelSmall)
+            } else if (readiness != null) {
+                Text(
+                    stringResource(if (readiness) R.string.alarm_ready else R.string.alarm_not_ready),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = if (readiness) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error
+                )
             }
         }
     }
