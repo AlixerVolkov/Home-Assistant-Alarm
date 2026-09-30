@@ -172,8 +172,12 @@ class MqttDeviceBridge(
         activeConfig = config
 
         runCatching {
+            // Use the current LAN only for diagnostics/name resolution. Do not bind the
+            // MQTT socket to Network.socketFactory: Android Network instances are ephemeral and
+            // can disappear/reappear when Wi-Fi roams or reconnects. Reusing a stale Network can
+            // produce "Binding socket to network ... failed: ENONET" even though the broker is
+            // reachable and the normal Android route is healthy.
             val lan = lanNetworkHelper.select()
-                ?: error("No Wi-Fi/Ethernet LAN network detected. Connect the tablet to the same LAN/VLAN as the MQTT broker.")
             val addresses = lanNetworkHelper.resolve(config.host, lan)
             val resolved = addresses.filterIsInstance<Inet4Address>()
                 .firstOrNull { !it.isLoopbackAddress }
@@ -204,9 +208,10 @@ class MqttDeviceBridge(
                 tcpReachable = null
             )
 
-            // Verify the exact LAN route before doing MQTT. A successful TCP probe separates
-            // network/VLAN/firewall failures from MQTT authentication/protocol failures.
-            probeTcp(lan.network.socketFactory, resolved, config.port)
+            // Probe through Android's normal socket route. This avoids binding the probe to
+            // an obsolete Network object while still separating TCP reachability from MQTT
+            // authentication/protocol failures.
+            probeTcp(javax.net.SocketFactory.getDefault(), resolved, config.port)
             _state.value = _state.value.copy(tcpReachable = true)
 
             val mqttClient = MqttAsyncClient(
@@ -227,10 +232,11 @@ class MqttDeviceBridge(
                 // conflated, so this window is only needed for the small number of QoS 1
                 // discovery/availability messages.
                 setMaxInflight(20)
-                // Android Network.socketFactory binds plain MQTT to Wi-Fi/Ethernet and bypasses
-                // an unrelated VPN/default route. TLS stays on the platform SSL factory so
-                // certificate validation is not weakened.
-                if (!config.tls) setSocketFactory(lan.network.socketFactory)
+                // Let Android choose the current route for MQTT. Do not use a cached
+                // Network.socketFactory here: when Wi-Fi reconnects Android can invalidate the
+                // Network object and Paho then fails with ENONET while the broker remains reachable.
+                // TLS continues to use Paho's normal SSL socket factory.
+
                 if (config.username.isNotBlank()) setUserName(config.username)
                 if (config.password.isNotBlank()) setPassword(config.password.toCharArray())
                 setWill(availabilityTopic, "offline".toByteArray(Charsets.UTF_8), 1, true)
