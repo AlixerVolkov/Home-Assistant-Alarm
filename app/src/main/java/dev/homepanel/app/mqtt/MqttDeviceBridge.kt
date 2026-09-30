@@ -185,10 +185,9 @@ class MqttDeviceBridge(
                 ?: addresses.firstOrNull()
                 ?: throw UnknownHostException(config.host)
 
-            // For plain MQTT use the resolved LAN IPv4 and bind sockets to the selected
-            // Wi-Fi/Ethernet Network. This avoids Android routing MQTT through a VPN or another
-            // default network while Home Assistant itself still appears to work. For TLS keep
-            // the hostname so certificate hostname validation remains correct.
+            // Prefer the resolved LAN IPv4 for plain MQTT. The connection itself still uses
+            // Android's normal routing and is not bound to a specific Network instance. For TLS
+            // keep the hostname so certificate hostname validation remains correct.
             val connectionHost = if (!config.tls && resolved is Inet4Address) {
                 resolved.hostAddress ?: config.host
             } else {
@@ -203,8 +202,8 @@ class MqttDeviceBridge(
                 brokerUri = displayUri,
                 deviceIdentifier = deviceIdentifier,
                 resolvedAddress = resolvedAddress,
-                lanTransport = lan.transport,
-                localIpv4 = lan.ipv4Address,
+                lanTransport = lan?.transport,
+                localIpv4 = lan?.ipv4Address,
                 tcpReachable = null
             )
 
