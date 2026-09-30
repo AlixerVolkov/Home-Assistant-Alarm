@@ -169,33 +169,73 @@ class RtspCameraServer(private val context: Context) : ConnectChecker {
                 cameraServer.setVideoCodec(VideoCodec.H264)
 
                 val rotation = CameraHelper.getCameraOrientation(appContext)
-                var width = DEFAULT_WIDTH
-                var height = DEFAULT_HEIGHT
-                var prepared = cameraServer.prepareVideo(
-                    width,
-                    height,
-                    DEFAULT_FPS,
-                    DEFAULT_BITRATE,
-                    DEFAULT_IFRAME_INTERVAL,
-                    rotation
-                )
-                if (!prepared) {
-                    width = FALLBACK_WIDTH
-                    height = FALLBACK_HEIGHT
-                    prepared = cameraServer.prepareVideo(
+
+                // Camera1 can expose a different set of supported sizes on each device. Do not
+                // blindly request 1280x720: startStream may throw CameraOpenException when that
+                // size is not a valid camera mode even though the H.264 encoder can encode it.
+                // RootEncoder exposes the actual front-camera sizes, so select from that list.
+                val supportedResolutions = runCatching {
+                    cameraServer.getResolutionsFront()
+                        .map { it.width to it.height }
+                        .filter { (w, h) -> w > 0 && h > 0 }
+                        .distinct()
+                }.getOrDefault(emptyList())
+
+                val selected = selectResolution(supportedResolutions)
+                    ?: (FALLBACK_WIDTH to FALLBACK_HEIGHT)
+                var width = selected.first
+                var height = selected.second
+
+                var prepared = runCatching {
+                    cameraServer.prepareVideo(
                         width,
                         height,
-                        FALLBACK_FPS,
-                        FALLBACK_BITRATE,
+                        FPS_FOR(width, height),
+                        BITRATE_FOR(width, height),
                         DEFAULT_IFRAME_INTERVAL,
                         rotation
                     )
+                }.getOrDefault(false)
+
+                // Some older drivers report a camera size that the MediaCodec encoder cannot
+                // accept. Try the remaining supported camera sizes, largest/closest first.
+                if (!prepared) {
+                    val alternatives = supportedResolutions
+                        .filterNot { it == selected }
+                        .sortedWith(resolutionComparator())
+                    for ((candidateWidth, candidateHeight) in alternatives) {
+                        val candidatePrepared = runCatching {
+                            cameraServer.prepareVideo(
+                                candidateWidth,
+                                candidateHeight,
+                                FPS_FOR(candidateWidth, candidateHeight),
+                                BITRATE_FOR(candidateWidth, candidateHeight),
+                                DEFAULT_IFRAME_INTERVAL,
+                                rotation
+                            )
+                        }.getOrDefault(false)
+                        if (candidatePrepared) {
+                            width = candidateWidth
+                            height = candidateHeight
+                            prepared = true
+                            break
+                        }
+                    }
                 }
-                check(prepared) { "The device could not prepare an H.264 encoder at 1280x720 or 640x480" }
+
+                check(prepared) {
+                    if (supportedResolutions.isEmpty()) {
+                        "The front camera did not report any supported resolutions"
+                    } else {
+                        "The device could not prepare H.264 at any supported front-camera resolution: " +
+                            supportedResolutions.joinToString { "${it.first}x${it.second}" }
+                    }
+                }
 
                 // In background mode startPreview selects the requested camera facing. Actual
-                // capture begins when startStream opens the camera.
-                cameraServer.startPreview(CameraHelper.Facing.FRONT)
+                // capture begins when startStream opens the camera. The selected size is now a
+                // size reported by that camera, avoiding CameraOpenException on unsupported modes.
+                cameraServer.startPreview(CameraHelper.Facing.FRONT, width, height)
 
                 if (!desiredEnabled || generation != operationGeneration.get()) {
                     runCatching { if (cameraServer.isStreaming) cameraServer.stopStream() }
@@ -386,6 +426,39 @@ cameras:
         private const val FALLBACK_HEIGHT = 480
         private const val FALLBACK_FPS = 12
         private const val FALLBACK_BITRATE = 800_000
+
+        /**
+         * Prefer 16:9 modes near 720p, but never invent a mode that the camera did not report.
+         * This is intentionally independent of encoder capability; prepareVideo is still tested
+         * for every candidate because old devices can report camera modes their H.264 encoder
+         * cannot consume.
+         */
+        private fun selectResolution(
+            resolutions: List<Pair<Int, Int>>
+        ): Pair<Int, Int>? = resolutions
+            .filter { (w, h) -> w <= DEFAULT_WIDTH && h <= DEFAULT_HEIGHT }
+            .minWithOrNull(resolutionComparator())
+
+        private fun resolutionComparator(): Comparator<Pair<Int, Int>> =
+            compareBy<Pair<Int, Int>>(
+                { aspectDistance(it) },
+                { distanceFromTarget(it) }
+            ).thenByDescending { it.first * it.second }
+
+        private fun aspectDistance(resolution: Pair<Int, Int>): Double {
+            val (w, h) = resolution
+            return kotlin.math.abs(w.toDouble() / h.toDouble() - 16.0 / 9.0)
+        }
+
+        private fun distanceFromTarget(resolution: Pair<Int, Int>): Int =
+            kotlin.math.abs(DEFAULT_WIDTH - resolution.first) +
+                kotlin.math.abs(DEFAULT_HEIGHT - resolution.second)
+
+        private fun FPS_FOR(width: Int, height: Int): Int =
+            if (width * height <= FALLBACK_WIDTH * FALLBACK_HEIGHT) FALLBACK_FPS else DEFAULT_FPS
+
+        private fun BITRATE_FOR(width: Int, height: Int): Int =
+            if (width * height <= FALLBACK_WIDTH * FALLBACK_HEIGHT) FALLBACK_BITRATE else DEFAULT_BITRATE
         private const val DEFAULT_IFRAME_INTERVAL = 2
         private const val START_GUARD_CLEAR_DELAY_MS = 8_000L
         private const val SAFETY_PREFS = "rtsp_safety"
