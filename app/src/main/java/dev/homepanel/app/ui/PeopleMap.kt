@@ -1,5 +1,8 @@
 package dev.homepanel.app.ui
 
+import android.graphics.Paint
+import android.graphics.RectF
+import android.graphics.Typeface
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.layout.Box
@@ -24,6 +27,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.nativeCanvas
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
@@ -150,7 +155,10 @@ fun OsmPeopleMap(
     val zoneFill = MaterialTheme.colorScheme.primary.copy(alpha = 0.20f)
     val zoneStroke = MaterialTheme.colorScheme.primary.copy(alpha = 0.72f)
     val personFill = MaterialTheme.colorScheme.tertiary
+    val trackerFill = MaterialTheme.colorScheme.secondary
     val personStroke = MaterialTheme.colorScheme.surface
+    val labelBackground = MaterialTheme.colorScheme.surface.copy(alpha = 0.92f)
+    val labelForeground = MaterialTheme.colorScheme.onSurface
 
     Box(
         modifier = modifier
@@ -213,11 +221,50 @@ fun OsmPeopleMap(
                 val duplicateCount = persons.count { it.latitude == lat && it.longitude == lon }
                 val angle = (index % 8) * PI / 4.0
                 val displacement = if (duplicateCount > 1) {
-                    Offset((cos(angle) * 12.0).toFloat(), (sin(angle) * 12.0).toFloat())
+                    Offset((cos(angle) * 18.0).toFloat(), (sin(angle) * 18.0).toFloat())
                 } else Offset.Zero
                 val center = base + displacement
-                drawCircle(personStroke, radius = 13f, center = center)
-                drawCircle(personFill, radius = 9f, center = center)
+                val isTracker = person.entityType == "device_tracker"
+                val markerFill = if (isTracker) trackerFill else personFill
+                drawCircle(personStroke, radius = 15f, center = center)
+                drawCircle(markerFill, radius = 11f, center = center)
+
+                drawContext.canvas.nativeCanvas.apply {
+                    val markerPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                        color = personStroke.toArgb()
+                        textSize = 16f
+                        textAlign = Paint.Align.CENTER
+                        typeface = Typeface.DEFAULT_BOLD
+                    }
+                    val markerText = if (isTracker) {
+                        if (person.friendlyName.contains("bike", ignoreCase = true) ||
+                            person.entityId.contains("bike", ignoreCase = true)
+                        ) "B" else "T"
+                    } else {
+                        person.friendlyName.trim().firstOrNull()?.uppercaseChar()?.toString() ?: "P"
+                    }
+                    drawText(markerText, center.x, center.y + 5f, markerPaint)
+
+                    val labelPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                        color = labelForeground.toArgb()
+                        textSize = 24f
+                        typeface = Typeface.DEFAULT_BOLD
+                    }
+                    val text = person.friendlyName
+                    val textWidth = labelPaint.measureText(text)
+                    val labelLeft = center.x + 17f
+                    val labelTop = center.y - 18f
+                    val backgroundPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                        color = labelBackground.toArgb()
+                    }
+                    drawRoundRect(
+                        RectF(labelLeft - 5f, labelTop - 5f, labelLeft + textWidth + 7f, labelTop + 25f),
+                        8f,
+                        8f,
+                        backgroundPaint
+                    )
+                    drawText(text, labelLeft, labelTop + 18f, labelPaint)
+                }
             }
         }
 
