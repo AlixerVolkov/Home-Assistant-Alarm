@@ -613,52 +613,106 @@ private fun HouseSummaryCard(
     onShowLights: () -> Unit
 ) {
     val summary = state.summary
-    Card(modifier = Modifier.fillMaxWidth()) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+    ) {
         Column(
-            modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                Text(stringResource(R.string.house_status), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-                Spacer(Modifier.weight(1f))
-                if (state.isLoading) CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
-                if (lightAreas.isNotEmpty()) TextButton(onClick = onShowLights) { Text("💡 Lights") }
-                if (!summary?.persons.isNullOrEmpty()) TextButton(onClick = onShowMap) { Text("📍 Map") }
-                IconButton(onClick = onRefresh) { Text("↻", style = MaterialTheme.typography.titleMedium) }
+            Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(stringResource(R.string.house_status), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                    Text("At-a-glance status", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+                if (state.isLoading) {
+                    CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
+                    Spacer(Modifier.width(8.dp))
+                }
+                IconButton(onClick = onRefresh) { Text("↻", style = MaterialTheme.typography.titleLarge) }
             }
+
             if (summary == null) {
                 Text(state.errorMessage ?: stringResource(R.string.house_status_loading), color = MaterialTheme.colorScheme.onSurfaceVariant)
             } else {
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    HomeMetricTile("🚪", summary.openDoors.toString(), "Doors open", summary.openDoors > 0, Modifier.weight(1f))
+                    HomeMetricTile("🪟", summary.openWindows.toString(), "Windows", summary.openWindows > 0, Modifier.weight(1f))
+                    HomeMetricTile("💡", summary.lightsOn.toString(), "Lights on", summary.lightsOn > 0, Modifier.weight(1f))
+                }
+
                 val peopleHome = summary.persons
                     .filter { it.entityType == "person" && it.state.equals("home", ignoreCase = true) }
-                    .joinToString(", ") { it.friendlyName }
-                val statusParts = buildList {
-                    if (summary.openDoors > 0) add("${summary.openDoors} door${if (summary.openDoors == 1) "" else "s"} open")
-                    if (summary.openWindows > 0) add("${summary.openWindows} window${if (summary.openWindows == 1) "" else "s"} open")
-                    if (summary.lightsOn > 0) add("${summary.lightsOn} light${if (summary.lightsOn == 1) "" else "s"} on")
-                    if (peopleHome.isNotBlank()) add("$peopleHome at home")
-                    summary.temperatureC?.let { add("${String.format(Locale.getDefault(), "%.1f", it)}°C") }
+                    .map { it.friendlyName }
+                val trackerCount = summary.persons.count { it.entityType == "device_tracker" }
+                Surface(shape = MaterialTheme.shapes.large, color = MaterialTheme.colorScheme.surfaceVariant) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 10.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text("⌂", style = MaterialTheme.typography.titleLarge)
+                        Spacer(Modifier.width(10.dp))
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                if (peopleHome.isEmpty()) "Nobody marked at home" else peopleHome.joinToString(", "),
+                                style = MaterialTheme.typography.titleSmall,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                            Text(
+                                buildString {
+                                    append(if (peopleHome.isEmpty()) "Presence available on map" else "At home")
+                                    if (trackerCount > 0) append(" · $trackerCount tracked device${if (trackerCount == 1) "" else "s"}")
+                                    summary.temperatureC?.let { append(" · ${String.format(Locale.getDefault(), "%.1f", it)}°C") }
+                                },
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
                 }
-                Text(
-                    if (statusParts.isEmpty()) "Home looks quiet" else statusParts.joinToString(" · "),
-                    style = MaterialTheme.typography.bodyMedium
-                )
+
                 if (summary.openEntityNames.isNotEmpty()) {
                     Text(
                         stringResource(R.string.house_open_entities, summary.openEntityNames.joinToString(", ")),
                         style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        color = MaterialTheme.colorScheme.error
                     )
+                }
+
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    if (lightAreas.isNotEmpty()) {
+                        FilledTonalButton(onClick = onShowLights, modifier = Modifier.weight(1f)) { Text("💡  Lights") }
+                    }
+                    if (summary.persons.isNotEmpty()) {
+                        FilledTonalButton(onClick = onShowMap, modifier = Modifier.weight(1f)) { Text("📍  Map") }
+                    }
                 }
             }
         }
     }
 }
 
+@Composable
+private fun HomeMetricTile(
+    icon: String,
+    value: String,
+    label: String,
+    attention: Boolean,
+    modifier: Modifier = Modifier
+) {
+    Surface(
+        modifier = modifier,
+        shape = MaterialTheme.shapes.large,
+        color = if (attention) MaterialTheme.colorScheme.tertiaryContainer else MaterialTheme.colorScheme.surfaceVariant
+    ) {
+        Column(modifier = Modifier.padding(horizontal = 10.dp, vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            Text(icon, style = MaterialTheme.typography.titleLarge)
+            Text(value, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+            Text(label, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+    }
+}
 @Composable
 private fun LightsDialog(
     areas: List<LightAreaState>,
@@ -1265,40 +1319,47 @@ private fun CurrentWeatherBlock(
 
 @Composable
 private fun AlarmStateCard(alarm: AlarmEntityState?, modifier: Modifier = Modifier) {
-    val triggered = alarm?.state == "triggered"
-    Card(
-        modifier = modifier.heightIn(min = 150.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = if (triggered) MaterialTheme.colorScheme.errorContainer else MaterialTheme.colorScheme.primaryContainer
-        )
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(16.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center
+    val state = alarm?.state
+    val triggered = state == "triggered"
+    val armed = state?.startsWith("armed_") == true
+    val container = when {
+        triggered -> MaterialTheme.colorScheme.errorContainer
+        armed -> MaterialTheme.colorScheme.tertiaryContainer
+        else -> MaterialTheme.colorScheme.primaryContainer
+    }
+
+    Card(modifier = modifier.heightIn(min = 170.dp), colors = CardDefaults.cardColors(containerColor = container)) {
+        Row(
+            modifier = Modifier.fillMaxSize().padding(22.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(18.dp)
         ) {
-            Text(stateIcon(alarm?.state), style = MaterialTheme.typography.displayMedium)
-            Spacer(Modifier.height(8.dp))
-            Text(
-                text = alarmStateLabel(alarm?.state),
-                style = MaterialTheme.typography.headlineSmall,
-                fontWeight = FontWeight.Bold,
-                textAlign = TextAlign.Center
-            )
-            alarm?.changedBy?.let { changedBy ->
-                Spacer(Modifier.height(6.dp))
+            Surface(shape = MaterialTheme.shapes.extraLarge, color = MaterialTheme.colorScheme.surface.copy(alpha = 0.72f)) {
+                Box(modifier = Modifier.size(92.dp), contentAlignment = Alignment.Center) {
+                    Text(stateIcon(state), style = MaterialTheme.typography.displayMedium)
+                }
+            }
+            Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.Center) {
+                Text("SECURITY", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, fontWeight = FontWeight.Bold)
+                Text(alarmStateLabel(state), style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
                 Text(
-                    text = stringResource(R.string.changed_by, changedBy),
-                    style = MaterialTheme.typography.bodySmall,
-                    textAlign = TextAlign.Center
+                    when {
+                        triggered -> "Immediate attention required"
+                        armed -> "Home protection is active"
+                        state == "disarmed" -> "Alarm is currently disarmed"
+                        else -> "Waiting for Home Assistant"
+                    },
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
+                alarm?.changedBy?.let { changedBy ->
+                    Spacer(Modifier.height(6.dp))
+                    Text(stringResource(R.string.changed_by, changedBy), style = MaterialTheme.typography.labelMedium)
+                }
             }
         }
     }
 }
-
 @Composable
 private fun AlarmActionsPanel(
     alarm: AlarmEntityState?,
