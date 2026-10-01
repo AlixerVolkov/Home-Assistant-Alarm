@@ -147,6 +147,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     private val _houseSummary = MutableStateFlow(HouseSummaryUiState())
     val houseSummary: StateFlow<HouseSummaryUiState> = _houseSummary.asStateFlow()
+    val lightAreas = socketClient.lightAreas
 
     private val _update = MutableStateFlow(UpdateUiState())
     val update: StateFlow<UpdateUiState> = _update.asStateFlow()
@@ -418,6 +419,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun refreshHouseSummary() {
         userActivity()
         loadHouseSummary(showSpinner = _houseSummary.value.summary == null)
+    }
+
+    fun setLights(entityIds: Collection<String>, turnOn: Boolean) {
+        userActivity()
+        socketClient.setLights(entityIds, turnOn)
     }
 
     fun refreshDeviceLocation() {
