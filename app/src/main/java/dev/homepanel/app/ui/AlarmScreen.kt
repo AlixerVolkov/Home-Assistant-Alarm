@@ -157,21 +157,6 @@ fun AlarmScreen(
                 ErrorBlock(connectionState)
                 ContextStatusBanner(alarm)
                 WeatherWarningsBanner(houseSummaryState.summary?.weatherWarnings.orEmpty())
-                if (!settings.guestVoucherSensorEntityId.isNullOrBlank()) {
-                    GuestWifiEntryCard(
-                        voucher = connectionState.guestVoucher,
-                        pending = connectionState.pendingGuestVoucher,
-                        deleting = connectionState.pendingGuestVoucherDelete,
-                        onClick = { showGuestWifi = true }
-                    )
-                }
-                HouseSummaryCard(
-                    state = houseSummaryState,
-                    lightAreas = lightAreas,
-                    onRefresh = onRefreshHouse,
-                    onShowMap = { showPeopleMap = true },
-                    onShowLights = { showLights = true }
-                )
                 AlarmStateCard(alarm = alarm, modifier = Modifier.fillMaxWidth())
                 AlarmActionsPanel(
                     alarm = alarm,
@@ -182,14 +167,29 @@ fun AlarmScreen(
                         if (alarm?.requiresCode(action) == true) pinAction = action else onAction(action, null)
                     }
                 )
+                HouseSummaryCard(
+                    state = houseSummaryState,
+                    lightAreas = lightAreas,
+                    onRefresh = onRefreshHouse,
+                    onShowMap = { showPeopleMap = true },
+                    onShowLights = { showLights = true }
+                )
+                if (!settings.guestVoucherSensorEntityId.isNullOrBlank()) {
+                    GuestWifiEntryCard(
+                        voucher = connectionState.guestVoucher,
+                        pending = connectionState.pendingGuestVoucher,
+                        deleting = connectionState.pendingGuestVoucherDelete,
+                        onClick = { showGuestWifi = true }
+                    )
+                }
                 ForecastStrip(weatherState, onRefreshWeather)
             }
         } else {
             Column(
                 modifier = Modifier
                     .fillMaxSize()
-                    .padding(horizontal = outerPadding, vertical = 12.dp),
-                verticalArrangement = Arrangement.spacedBy(10.dp)
+                    .padding(horizontal = outerPadding, vertical = 14.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 DashboardHeader(
                     alarm = alarm,
@@ -205,46 +205,63 @@ fun AlarmScreen(
                 ErrorBlock(connectionState)
                 ContextStatusBanner(alarm)
                 WeatherWarningsBanner(houseSummaryState.summary?.weatherWarnings.orEmpty())
-                if (!settings.guestVoucherSensorEntityId.isNullOrBlank()) {
-                    GuestWifiEntryCard(
-                        voucher = connectionState.guestVoucher,
-                        pending = connectionState.pendingGuestVoucher,
-                        deleting = connectionState.pendingGuestVoucherDelete,
-                        onClick = { showGuestWifi = true }
-                    )
-                }
-                HouseSummaryCard(
-                    state = houseSummaryState,
-                    lightAreas = lightAreas,
-                    onRefresh = onRefreshHouse,
-                    onShowMap = { showPeopleMap = true },
-                    onShowLights = { showLights = true }
-                )
+
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
                         .weight(1f),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    horizontalArrangement = Arrangement.spacedBy(14.dp)
                 ) {
-                    AlarmStateCard(
-                        alarm = alarm,
+                    Column(
                         modifier = Modifier
-                            .weight(0.85f)
-                            .fillMaxHeight()
-                    )
-                    AlarmActionsPanel(
-                        alarm = alarm,
-                        connectionState = connectionState,
-                        compact = false,
-                        modifier = Modifier
-                            .weight(1.65f)
+                            .weight(1.25f)
                             .fillMaxHeight(),
-                        onActionRequested = { action ->
-                            if (alarm?.requiresCode(action) == true) pinAction = action else onAction(action, null)
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        AlarmStateCard(
+                            alarm = alarm,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .weight(0.72f)
+                        )
+                        AlarmActionsPanel(
+                            alarm = alarm,
+                            connectionState = connectionState,
+                            compact = false,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .weight(1.28f),
+                            onActionRequested = { action ->
+                                if (alarm?.requiresCode(action) == true) pinAction = action else onAction(action, null)
+                            }
+                        )
+                    }
+
+                    Column(
+                        modifier = Modifier
+                            .weight(0.95f)
+                            .fillMaxHeight()
+                            .verticalScroll(rememberScrollState()),
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        HouseSummaryCard(
+                            state = houseSummaryState,
+                            lightAreas = lightAreas,
+                            onRefresh = onRefreshHouse,
+                            onShowMap = { showPeopleMap = true },
+                            onShowLights = { showLights = true }
+                        )
+                        if (!settings.guestVoucherSensorEntityId.isNullOrBlank()) {
+                            GuestWifiEntryCard(
+                                voucher = connectionState.guestVoucher,
+                                pending = connectionState.pendingGuestVoucher,
+                                deleting = connectionState.pendingGuestVoucherDelete,
+                                onClick = { showGuestWifi = true }
+                            )
                         }
-                    )
+                        ForecastStrip(weatherState, onRefreshWeather)
+                    }
                 }
-                ForecastStrip(weatherState, onRefreshWeather)
             }
         }
     }
