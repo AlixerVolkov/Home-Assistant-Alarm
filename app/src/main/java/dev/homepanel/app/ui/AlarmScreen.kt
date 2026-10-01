@@ -75,6 +75,7 @@ import dev.homepanel.app.network.DailyForecast
 import dev.homepanel.app.network.HomeAssistantConnectionState
 import dev.homepanel.app.network.GuestVoucherState
 import dev.homepanel.app.network.HomeZoneLocation
+import dev.homepanel.app.network.LightAreaState
 import dev.homepanel.app.network.PersonLocation
 import dev.homepanel.app.network.WeatherWarning
 import java.time.Instant
@@ -93,6 +94,7 @@ fun AlarmScreen(
     weatherState: WeatherUiState,
     guestWifiState: GuestWifiUiState,
     houseSummaryState: HouseSummaryUiState,
+    lightAreas: List<LightAreaState>,
     history: List<PanelEvent>,
     onAction: (AlarmAction, String?) -> Unit,
     onRetryAlarmoArm: () -> Unit,
@@ -104,6 +106,7 @@ fun AlarmScreen(
     onReconnect: () -> Unit,
     onRefreshWeather: () -> Unit,
     onRefreshHouse: () -> Unit,
+    onSetLights: (Collection<String>, Boolean) -> Unit,
     onClearHistory: () -> Unit,
     onSettings: () -> Unit
 ) {
@@ -112,6 +115,7 @@ fun AlarmScreen(
     var showGuestWifi by remember { mutableStateOf(false) }
     var showHistory by remember { mutableStateOf(false) }
     var showPeopleMap by remember { mutableStateOf(false) }
+    var showLights by remember { mutableStateOf(false) }
     var showWeatherAlert by remember { mutableStateOf(false) }
 
     val activeWeatherWarnings = houseSummaryState.summary?.weatherWarnings.orEmpty().filter { it.active }
@@ -163,8 +167,10 @@ fun AlarmScreen(
                 }
                 HouseSummaryCard(
                     state = houseSummaryState,
+                    lightAreas = lightAreas,
                     onRefresh = onRefreshHouse,
-                    onShowMap = { showPeopleMap = true }
+                    onShowMap = { showPeopleMap = true },
+                    onShowLights = { showLights = true }
                 )
                 AlarmStateCard(alarm = alarm, modifier = Modifier.fillMaxWidth())
                 AlarmActionsPanel(
@@ -209,8 +215,10 @@ fun AlarmScreen(
                 }
                 HouseSummaryCard(
                     state = houseSummaryState,
+                    lightAreas = lightAreas,
                     onRefresh = onRefreshHouse,
-                    onShowMap = { showPeopleMap = true }
+                    onShowMap = { showPeopleMap = true },
+                    onShowLights = { showLights = true }
                 )
                 Row(
                     modifier = Modifier
@@ -270,6 +278,14 @@ fun AlarmScreen(
             persons = houseSummaryState.summary?.persons.orEmpty(),
             zones = houseSummaryState.summary?.zones.orEmpty(),
             onDismiss = { showPeopleMap = false }
+        )
+    }
+
+    if (showLights) {
+        LightsDialog(
+            areas = lightAreas,
+            onSetLights = onSetLights,
+            onDismiss = { showLights = false }
         )
     }
 
@@ -574,8 +590,10 @@ private fun formatWarningTime(value: String): String {
 @Composable
 private fun HouseSummaryCard(
     state: HouseSummaryUiState,
+    lightAreas: List<LightAreaState>,
     onRefresh: () -> Unit,
-    onShowMap: () -> Unit
+    onShowMap: () -> Unit,
+    onShowLights: () -> Unit
 ) {
     val summary = state.summary
     Card(modifier = Modifier.fillMaxWidth()) {
@@ -591,26 +609,27 @@ private fun HouseSummaryCard(
                 Text(stringResource(R.string.house_status), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
                 Spacer(Modifier.weight(1f))
                 if (state.isLoading) CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
-                if (!summary?.persons.isNullOrEmpty()) {
-                    TextButton(onClick = onShowMap) { Text("📍 ${stringResource(R.string.people_map)}") }
-                }
+                if (lightAreas.isNotEmpty()) TextButton(onClick = onShowLights) { Text("💡 Lights") }
+                if (!summary?.persons.isNullOrEmpty()) TextButton(onClick = onShowMap) { Text("📍 Map") }
                 IconButton(onClick = onRefresh) { Text("↻", style = MaterialTheme.typography.titleMedium) }
             }
             if (summary == null) {
                 Text(state.errorMessage ?: stringResource(R.string.house_status_loading), color = MaterialTheme.colorScheme.onSurfaceVariant)
             } else {
-                Row(
-                    modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
-                    horizontalArrangement = Arrangement.spacedBy(16.dp)
-                ) {
-                    Text("🚪 ${summary.openDoors}")
-                    Text("🪟 ${summary.openWindows}")
-                    Text("💡 ${summary.lightsOn}")
-                    Text("👤 ${summary.personsHome}/${summary.persons.size}")
-                    summary.temperatureC?.let { Text("🌡 ${String.format(Locale.getDefault(), "%.1f", it)}°C") }
-                    val activeWarnings = summary.weatherWarnings.count { it.active }
-                    if (activeWarnings > 0) Text("⚠️ $activeWarnings")
+                val peopleHome = summary.persons
+                    .filter { it.entityType == "person" && it.state.equals("home", ignoreCase = true) }
+                    .joinToString(", ") { it.friendlyName }
+                val statusParts = buildList {
+                    if (summary.openDoors > 0) add("${summary.openDoors} door${if (summary.openDoors == 1) "" else "s"} open")
+                    if (summary.openWindows > 0) add("${summary.openWindows} window${if (summary.openWindows == 1) "" else "s"} open")
+                    if (summary.lightsOn > 0) add("${summary.lightsOn} light${if (summary.lightsOn == 1) "" else "s"} on")
+                    if (peopleHome.isNotBlank()) add("$peopleHome at home")
+                    summary.temperatureC?.let { add("${String.format(Locale.getDefault(), "%.1f", it)}°C") }
                 }
+                Text(
+                    if (statusParts.isEmpty()) "Home looks quiet" else statusParts.joinToString(" · "),
+                    style = MaterialTheme.typography.bodyMedium
+                )
                 if (summary.openEntityNames.isNotEmpty()) {
                     Text(
                         stringResource(R.string.house_open_entities, summary.openEntityNames.joinToString(", ")),
@@ -623,6 +642,69 @@ private fun HouseSummaryCard(
     }
 }
 
+@Composable
+private fun LightsDialog(
+    areas: List<LightAreaState>,
+    onSetLights: (Collection<String>, Boolean) -> Unit,
+    onDismiss: () -> Unit
+) {
+    var expandedArea by remember { mutableStateOf<String?>(areas.firstOrNull()?.areaId) }
+    Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
+        Surface(
+            modifier = Modifier.fillMaxWidth(0.92f).fillMaxHeight(0.88f),
+            shape = MaterialTheme.shapes.extraLarge,
+            tonalElevation = 6.dp
+        ) {
+            Column(
+                modifier = Modifier.fillMaxSize().padding(18.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("💡 Lights by area", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+                    Spacer(Modifier.weight(1f))
+                    TextButton(onClick = onDismiss) { Text(stringResource(R.string.close)) }
+                }
+                Column(
+                    modifier = Modifier.fillMaxWidth().weight(1f).verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    areas.forEach { area ->
+                        Card(modifier = Modifier.fillMaxWidth()) {
+                            Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    TextButton(onClick = {
+                                        expandedArea = if (expandedArea == area.areaId) null else area.areaId
+                                    }) {
+                                        Text("${if (expandedArea == area.areaId) "▾" else "▸"} ${area.friendlyName} · ${area.lightsOn}/${area.lights.size}")
+                                    }
+                                    Spacer(Modifier.weight(1f))
+                                    TextButton(onClick = { onSetLights(area.lights.map { it.entityId }, true) }) { Text("On") }
+                                    TextButton(onClick = { onSetLights(area.lights.map { it.entityId }, false) }) { Text("Off") }
+                                }
+                                if (expandedArea == area.areaId) {
+                                    area.lights.forEach { light ->
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Text(
+                                                "${if (light.isOn) "●" else "○"} ${light.friendlyName}",
+                                                modifier = Modifier.weight(1f)
+                                            )
+                                            TextButton(onClick = { onSetLights(listOf(light.entityId), !light.isOn) }) {
+                                                Text(if (light.isOn) "Turn off" else "Turn on")
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
 @Composable
 private fun PersonsMapDialog(
     persons: List<PersonLocation>,
