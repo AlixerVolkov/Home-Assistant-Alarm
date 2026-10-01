@@ -17,8 +17,23 @@ data class PersonLocation(
     val latitude: Double?,
     val longitude: Double?,
     val gpsAccuracyMeters: Double? = null,
-    val source: String? = null
+    val source: String? = null,
+    val entityType: String = "person"
 )
+
+data class LightEntityState(
+    val entityId: String,
+    val friendlyName: String,
+    val isOn: Boolean
+)
+
+data class LightAreaState(
+    val areaId: String,
+    val friendlyName: String,
+    val lights: List<LightEntityState>
+) {
+    val lightsOn: Int get() = lights.count { it.isOn }
+}
 
 data class HomeZoneLocation(
     val entityId: String,
