@@ -1,78 +1,116 @@
-> Current release: **0.6.14** (`versionCode 24`)
+# HomePanel for Home Assistant
 
-> Current version: **0.6.14**
+HomePanel is a native Android wall-panel application for **Home Assistant** and **Alarmo**. It is designed for permanently mounted tablets and provides alarm control, household status, weather, presence, guest Wi-Fi, MQTT telemetry, RTSP camera streaming, kiosk behavior, and in-app updates from GitHub Releases.
 
-# HomePanel v0.6.10
+## Highlights
 
-## v0.6.10: selector de sensores de Home Assistant corregido
+- Native Android UI built with Jetpack Compose.
+- Direct Home Assistant integration over REST and WebSocket.
+- Alarmo / `alarm_control_panel` support for Home, Away, Night, Vacation, Custom Bypass, and Disarm.
+- PIN-aware alarm actions and pre-arm validation.
+- Household overview for doors, windows, lights, temperature, weather warnings, and presence.
+- OpenStreetMap-based presence map with Home Assistant zones and offline tile cache.
+- Home Assistant weather entities with forecast support, plus optional Open-Meteo fallback.
+- UniFi guest voucher workflow with QR code support.
+- Front-camera RTSP server for Frigate / go2rtc.
+- MQTT Discovery for HomePanel device telemetry and controls.
+- Automatic brightness using the Android ambient-light sensor.
+- Proximity and Home Assistant sensor-based wake behavior.
+- Immersive kiosk mode with optional settings PIN.
+- Persistent event history and crash-safe startup mode.
+- Signed APK builds and releases through GitHub Actions.
+- Android 7.1.1+ support (API 25+).
 
-- El selector de despertar carga **todos** los `binary_sensor.*`, no solo motion/occupancy/presence.
-- Motion, occupancy y presence aparecen primero.
-- Al abrir Configuración con credenciales ya guardadas se lanza automáticamente el descubrimiento de entidades.
-- Se muestra cuántos sensores binarios se han cargado para que una lista vacía sea diagnosticable.
+## Screens and capabilities
 
+HomePanel is intended to act as a compact smart-home control surface rather than a general Home Assistant dashboard. The main screen prioritizes:
 
-## v0.6.9: mapa OpenStreetMap + modo contextual de avisos
+- alarm state and actions,
+- relevant household alerts,
+- weather and warnings,
+- presence and map access,
+- guest Wi-Fi access,
+- quick access to settings and diagnostics.
 
-- El mapa de personas tiene ahora fondo real opcional de OpenStreetMap, con zoom, zonas de Home Assistant y fallback manual al mapa offline.
-- Los tiles se solicitan solo para la vista actual, con cache HTTP y atribucion visible de OpenStreetMap.
-- El diagnostico de red prueba tambien `tile.openstreetmap.org:443`.
-- Los avisos meteorologicos activos despiertan la pantalla, abren una vista contextual y muestran tipo, severidad, descripcion y expiracion cuando estan disponibles.
-- Los avisos nuevos y su limpieza se registran en el historial.
+The application keeps Home Assistant as the source of truth. MQTT and RTSP are optional integrations and are not required for normal alarm operation.
 
-## v0.6.7: avisos meteorológicos + mapa de personas + forecast mejorado
+## Requirements
 
-- Detecta avisos `binary_sensor.weather_warning*` y MeteoAlarm desde Home Assistant.
-- Muestra avisos activos como banner destacado, con severidad/descripción cuando la entidad los expone.
-- Añade un mapa offline de `person.*` usando coordenadas y `zone.*`, sin depender de Google Maps/OpenStreetMap ni abrir más firewall.
-- Si una persona está en una zona pero HA no expone GPS, HomePanel usa el centro de esa zona para representarla.
-- Forecast de 5 días rediseñado con condición, máximas/mínimas, probabilidad y cantidad de precipitación, viento, humedad/presión/UV cuando el proveedor los ofrece.
+- Android 7.1.1 or newer.
+- A reachable Home Assistant instance.
+- A Home Assistant Long-Lived Access Token.
+- An `alarm_control_panel.*` entity or Alarmo setup for alarm control.
 
+Optional integrations:
 
-Panel Android moderno para Home Assistant / Alarmo, pensado para tablets de pared.
+- MQTT broker for MQTT Discovery and telemetry.
+- Frigate / go2rtc for the tablet front-camera RTSP stream.
+- UniFi guest-voucher entities exposed through Home Assistant.
+- A `weather.*` entity for weather and forecasts.
 
-## v0.6.6: Weather de Home Assistant + diagnóstico de red
+## Installation
 
-- Nueva fuente de tiempo **Home Assistant** (predeterminada), usando una entidad `weather.*`.
-- HomePanel obtiene el estado actual desde la entidad y el pronóstico mediante `weather.get_forecasts`.
-- Open-Meteo sigue disponible como opción alternativa directa.
-- Con Home Assistant como fuente del tiempo, la tablet no necesita permiso de ubicación ni salida directa a `api.open-meteo.com`.
-- Nueva pantalla de **Diagnóstico de red** para probar LAN/IPv4, Home Assistant, weather de HA, Open-Meteo, GitHub, MQTT y el listener RTSP local.
+Download the latest signed APK from the repository's **Releases** page and install it on the Android device.
 
-## Funciones principales
+For a permanently mounted tablet, it is recommended to:
 
-- Conexion directa a Home Assistant por WebSocket.
-- Alarmo / `alarm_control_panel`: Home, Away, Night, Vacation, Custom Bypass y Disarm con PIN cuando corresponde.
-- Estado en tiempo real y proteccion contra enviar una transicion al estado que ya esta activo.
-- Tiempo y ubicacion automaticos segun el dispositivo.
-- Salvapantallas, reposo y despertar por sensor HA o proximidad Android.
-- Interfaz adaptable a telefono/tablet, portrait/landscape y ventanas redimensionables.
-- UniFi Hotspot Manager: crear/borrar voucher, QR, copiar y compartir codigo.
-- Camara frontal H.264 por RTSP para Frigate/go2rtc.
-- MQTT Discovery para registrar HomePanel como dispositivo en Home Assistant.
-- Luminosidad ambiente, bateria, carga, proximidad, pantalla y diagnostico RTSP publicados por MQTT.
-- Brillo automatico usando el sensor de luz Android.
-- Estado resumido de la casa y dashboard contextual de alarma.
-- Historial reciente persistente.
-- Modo kiosk inmersivo con PIN para configuracion.
-- Comprobacion y descarga de actualizaciones desde GitHub Releases.
+- keep the device connected to a stable Wi-Fi or Ethernet network,
+- disable Android battery restrictions for HomePanel where appropriate,
+- disable “pause app activity if unused” / app hibernation,
+- use kiosk mode if the tablet is dedicated to HomePanel.
 
-## RTSP y Frigate
+## Initial setup
 
-HomePanel v0.6.0 **prefiere IPv4** para la URL que presenta al usuario. Busca la IPv4 de la red activa de Android antes de recorrer otras interfaces. Si la tablet dispone, por ejemplo, de `192.168.1.74`, mostrara:
+1. Open HomePanel.
+2. Enter the Home Assistant base URL.
+3. Provide a Home Assistant Long-Lived Access Token.
+4. Discover and select the alarm entity.
+5. Configure optional wake sensors, weather source, MQTT, RTSP, and guest Wi-Fi integrations.
+6. Save the configuration.
+
+The access token and other secrets are stored encrypted using Android Keystore-backed encryption.
+
+## Home Assistant integration
+
+HomePanel uses:
+
+- REST API for discovery, household summaries, images, weather, and supporting data.
+- WebSocket API for real-time alarm state, events, and service calls.
+
+The application does not require a custom Home Assistant integration.
+
+## MQTT Discovery
+
+When MQTT Discovery is enabled, HomePanel can expose entities such as:
+
+- battery level,
+- battery temperature,
+- charging state,
+- proximity,
+- ambient light,
+- screen state,
+- display mode,
+- RTSP server state,
+- RTSP client count,
+- RTSP URL.
+
+Each installation uses a device-specific identifier so multiple HomePanel tablets can coexist in Home Assistant.
+
+HomePanel intentionally uses Android's normal network routing for MQTT instead of binding the MQTT client to a cached Android `Network` object. This avoids stale-network `ENONET` failures after Wi-Fi reconnects or network changes.
+
+## RTSP camera
+
+HomePanel can expose the tablet's front camera as an H.264 RTSP stream for Frigate or go2rtc.
+
+Example endpoint:
 
 ```text
 rtsp://192.168.1.74:8554/
 ```
 
-En Ajustes > Camara frontal RTSP puedes:
+The application uses the Camera1 compatibility backend for older Android devices and selects a resolution reported as supported by the actual front camera instead of assuming a fixed 1280×720 mode.
 
-- ver la IPv4 detectada y la interfaz,
-- fijar manualmente un host/IP anunciado si Android elige una interfaz incorrecta,
-- copiar la URL RTSP,
-- copiar un bloque de configuracion listo para Frigate/go2rtc.
-
-Ejemplo:
+Example go2rtc / Frigate configuration:
 
 ```yaml
 go2rtc:
@@ -87,72 +125,96 @@ cameras:
           input_args: preset-rtsp-restream
           roles:
             - detect
-    detect:
-      width: 1280
-      height: 720
 ```
 
-La camara es video H.264 1280x720 a 15 fps, sin audio en esta version.
+## Maps and privacy
 
-## HomePanel como dispositivo MQTT
+Presence coordinates come from Home Assistant entities and zones. When OpenStreetMap mode is enabled, HomePanel only requests normal map tiles for the visible map area. Person names and Home Assistant entity IDs are not sent to the tile server.
 
-Con MQTT Discovery activado se publican, entre otras:
+Cached tiles can be used when the tablet is offline.
 
-- `sensor.homepanel_battery`
-- `sensor.homepanel_battery_temperature`
-- `binary_sensor.homepanel_charging`
-- `binary_sensor.homepanel_proximity`
-- `sensor.homepanel_illuminance`
-- `switch.homepanel_screen`
-- `sensor.homepanel_display_mode`
-- `binary_sensor.homepanel_rtsp_server`
-- `sensor.homepanel_rtsp_clients`
-- `sensor.homepanel_front_camera_rtsp`
+## Build
 
-Los `unique_id` incorporan el Android ID para permitir varios paneles.
+Toolchain used by the project:
 
-## Actualizaciones desde HomePanel
+- JDK 17
+- Android SDK 37
+- Android Build Tools 36.0.0
+- Gradle 9.6.0
+- Android Gradle Plugin 9.4.0
 
-La app consulta el ultimo **GitHub Release** de este repositorio. Para que exista un APK descargable debes publicar una release, no solo ejecutar el workflow de build.
+Build a release APK with:
 
-Hay dos workflows:
+```bash
+gradle --no-daemon --stacktrace :app:assembleRelease
+```
 
-- **Build signed Android APK**: compila y deja un artifact de GitHub Actions.
-- **Publish HomePanel Release**: compila el mismo APK firmado y crea/actualiza la release de la version actual en GitHub Releases con su APK firmado.
+Build output:
 
-Ejecuta `Publish HomePanel Release` manualmente desde Actions cuando quieras distribuir una version.
+```text
+app/build/outputs/apk/release/app-release.apk
+```
 
-## Firma
+## Signing
 
-Mantener siempre:
+Release builds use the following GitHub Actions secrets:
+
+- `ANDROID_KEYSTORE_BASE64`
+- `ANDROID_KEYSTORE_PASSWORD`
+- `ANDROID_KEY_ALIAS`
+- `ANDROID_KEY_PASSWORD`
+
+The project must keep the same application ID and signing key for in-place upgrades:
 
 ```text
 applicationId = dev.homepanel.app
-mismo keystore de release
-versionCode creciente
 ```
 
-Version actual:
+## GitHub Actions
+
+Two workflows are included:
+
+- **Build signed Android APK** — validates the project and uploads a signed APK as a workflow artifact.
+- **Publish HomePanel Release** — builds, signs, verifies, hashes, and publishes the APK to GitHub Releases.
+
+Release publishing is tied to the version declared in `app/build.gradle.kts`.
+
+## Security notes
+
+- Home Assistant access tokens are encrypted before being stored locally.
+- HTTP is supported for local Home Assistant installations, but HTTPS is recommended.
+- HomePanel does not silently disable Android security or hibernation protections.
+- Full Android Device Owner / Lock Task provisioning is outside the scope of the normal APK install.
+
+## Project structure
 
 ```text
-versionCode = 21
-versionName = 0.6.10
+app/src/main/java/dev/homepanel/app/
+├── camera/       RTSP camera server
+├── data/         settings and persistent event history
+├── diagnostics/  crash diagnostics
+├── mqtt/         MQTT Discovery and telemetry
+├── network/      Home Assistant, weather, map tiles and update clients
+├── security/     local secret encryption
+└── ui/           Jetpack Compose screens
 ```
 
-## Kiosk
+See [ARCHITECTURE.md](ARCHITECTURE.md) for more implementation details and [ROADMAP.md](ROADMAP.md) for planned improvements.
 
-El modo kiosk de v0.6.0 oculta barras de sistema y puede exigir PIN para entrar en Configuracion. No convierte automaticamente el dispositivo en Android Device Owner; un bloqueo total de cambio de aplicaciones requiere provisionamiento adicional y queda como mejora futura.
+## Contributing
 
-## Estabilidad y diagnostico (v0.6.4)
+Contributions are welcome. Please read [CONTRIBUTING.md](CONTRIBUTING.md) before opening a pull request.
 
-- RTSP y MQTT son modulos lazy: si estan desactivados no se instancian durante el arranque.
-- Tras un cierre Java/Kotlin inesperado, el siguiente arranque muestra un informe copiable con el stack trace.
-- El primer arranque tras un crash usa Modo seguro durante esa sesion: RTSP, MQTT, sensores y chequeos automaticos de actualizacion quedan temporalmente desactivados para comprobar si el nucleo de alarma es estable.
-- Si la aplicacion vuelve a cerrarse y no aparece ningun informe al siguiente arranque, el fallo puede ser nativo/driver o un cierre del proceso por Android; en ese caso necesitaremos logcat.
+When reporting a problem, include:
 
+- Android version and device model,
+- HomePanel version,
+- relevant Home Assistant entity types,
+- the exact error message,
+- whether the problem reproduces after restarting the app.
 
-## Android 17 permissions (v0.6.1)
+Do not include Home Assistant access tokens, passwords, private URLs, or signing secrets in issues.
 
-HomePanel serializes Local network, Camera and Location permission requests. On Android 17+ it first explains and requests `ACCESS_LOCAL_NETWORK`; only after that flow finishes does it request camera/location permissions. MQTT, Home Assistant LAN access and RTSP are retried when Local network access is granted.
+## License
 
-HomePanel also checks Android unused-app restrictions. For a permanently mounted panel, disabling **Pause app activity if unused / Manage app if unused** is recommended. Android does not allow a normal app to switch this off silently, so HomePanel opens the official system settings page for the user to confirm it.
+Licensed under the Apache License 2.0. See [LICENSE](LICENSE) and [NOTICE](NOTICE).
