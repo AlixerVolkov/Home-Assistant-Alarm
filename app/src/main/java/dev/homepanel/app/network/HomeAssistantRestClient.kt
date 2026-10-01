@@ -140,6 +140,7 @@ class HomeAssistantRestClient(
             val openNames = mutableListOf<String>()
             val temperatures = mutableListOf<Triple<String, String, Double>>()
             val persons = mutableListOf<PersonLocation>()
+            val trackers = mutableListOf<PersonLocation>()
             val zones = mutableListOf<HomeZoneLocation>()
             val warnings = mutableListOf<WeatherWarning>()
 
@@ -177,8 +178,28 @@ class HomeAssistantRestClient(
                         latitude = attributes?.optDoubleOrNull("latitude"),
                         longitude = attributes?.optDoubleOrNull("longitude"),
                         gpsAccuracyMeters = attributes?.optDoubleOrNull("gps_accuracy"),
-                        source = attributes?.optString("source")?.takeIf { it.isNotBlank() && it != "null" }
+                        source = attributes?.optString("source")?.takeIf { it.isNotBlank() && it != "null" },
+                        entityType = "person"
                     )
+                }
+
+                // Standalone device_tracker entities are useful for bikes, cars and Traccar
+                // devices that are not attached to a Home Assistant person entity.
+                if (domain == "device_tracker") {
+                    val latitude = attributes?.optDoubleOrNull("latitude")
+                    val longitude = attributes?.optDoubleOrNull("longitude")
+                    if (latitude != null && longitude != null) {
+                        trackers += PersonLocation(
+                            entityId = entityId,
+                            friendlyName = name,
+                            state = rawState.ifBlank { "unknown" },
+                            latitude = latitude,
+                            longitude = longitude,
+                            gpsAccuracyMeters = attributes?.optDoubleOrNull("gps_accuracy"),
+                            source = attributes?.optString("source_type")?.takeIf { it.isNotBlank() && it != "null" },
+                            entityType = "device_tracker"
+                        )
+                    }
                 }
 
                 if (domain == "binary_sensor" && isWeatherWarningEntity(entityId, attributes)) {
@@ -231,7 +252,12 @@ class HomeAssistantRestClient(
                 if (person.latitude != null && person.longitude != null) return@map person
                 val zone = zoneByStateName[person.state.lowercase()]
                 if (zone != null) person.copy(latitude = zone.latitude, longitude = zone.longitude) else person
-            }.sortedBy { it.friendlyName.lowercase() }
+            }
+            val personSourceTrackers = persons.mapNotNull { it.source }.toSet()
+            val standaloneTrackers = trackers.filterNot { it.entityId in personSourceTrackers }
+            val mappedLocations = (resolvedPersons + standaloneTrackers)
+                .distinctBy { it.entityId }
+                .sortedWith(compareBy<PersonLocation>({ it.entityType != "person" }, { it.friendlyName.lowercase() }))
 
             val preferredTemperature = temperatures.minByOrNull { (entityId, name, _) ->
                 val haystack = "$entityId $name".lowercase()
@@ -250,7 +276,7 @@ class HomeAssistantRestClient(
                 temperatureName = preferredTemperature?.second,
                 openEntityNames = openNames,
                 weatherWarnings = warnings.sortedWith(compareByDescending<WeatherWarning> { it.active }.thenBy { it.friendlyName.lowercase() }),
-                persons = resolvedPersons,
+                persons = mappedLocations,
                 zones = zones.sortedBy { it.friendlyName.lowercase() }
             )
         }
