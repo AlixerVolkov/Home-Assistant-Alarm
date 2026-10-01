@@ -24,6 +24,11 @@ class HomeAssistantWebSocket(
     private val entityFriendlyNames = ConcurrentHashMap<String, String>()
     private val guestVoucherRequestIds = ConcurrentHashMap.newKeySet<Int>()
     private val guestVoucherDeleteRequestIds = ConcurrentHashMap.newKeySet<Int>()
+    private val lightStates = ConcurrentHashMap<String, LightEntityState>()
+    private val entityAreaIds = ConcurrentHashMap<String, String>()
+    private val entityDeviceIds = ConcurrentHashMap<String, String>()
+    private val deviceAreaIds = ConcurrentHashMap<String, String>()
+    private val areaNames = ConcurrentHashMap<String, String>()
 
     private val _state = MutableStateFlow(HomeAssistantConnectionState())
     val state: StateFlow<HomeAssistantConnectionState> = _state.asStateFlow()
@@ -34,6 +39,9 @@ class HomeAssistantWebSocket(
     private val _entityEvents = MutableSharedFlow<HomeEntityEvent>(extraBufferCapacity = 64)
     val entityEvents: SharedFlow<HomeEntityEvent> = _entityEvents.asSharedFlow()
 
+    private val _lightAreas = MutableStateFlow<List<LightAreaState>>(emptyList())
+    val lightAreas: StateFlow<List<LightAreaState>> = _lightAreas.asStateFlow()
+
     private var webSocket: WebSocket? = null
     private var accessToken: String = ""
     private var alarmEntityId: String = ""
@@ -42,6 +50,9 @@ class HomeAssistantWebSocket(
     private var guestCreateButtonEntityId: String? = null
     private var guestDeleteButtonEntityId: String? = null
     private var getStatesRequestId: Int? = null
+    private var areaRegistryRequestId: Int? = null
+    private var deviceRegistryRequestId: Int? = null
+    private var entityRegistryRequestId: Int? = null
     private var lastAlarmoArmAction: AlarmAction? = null
     private var lastAlarmoArmCode: String? = null
 
@@ -75,8 +86,17 @@ class HomeAssistantWebSocket(
         webSocket = null
         current?.close(1000, "Client disconnect")
         getStatesRequestId = null
+        areaRegistryRequestId = null
+        deviceRegistryRequestId = null
+        entityRegistryRequestId = null
         actionRequestIds.clear()
         entityFriendlyNames.clear()
+        lightStates.clear()
+        entityAreaIds.clear()
+        entityDeviceIds.clear()
+        deviceAreaIds.clear()
+        areaNames.clear()
+        _lightAreas.value = emptyList()
         lastAlarmoArmAction = null
         lastAlarmoArmCode = null
         guestVoucherRequestIds.clear()
@@ -183,6 +203,19 @@ class HomeAssistantWebSocket(
                 pendingAction = null
             )
         }
+    }
+
+    fun setLights(entityIds: Collection<String>, turnOn: Boolean) {
+        val socket = authenticatedSocket() ?: return
+        val ids = entityIds.map(String::trim).filter(String::isNotBlank).distinct()
+        if (ids.isEmpty()) return
+        val payload = JSONObject()
+            .put("id", nextId.getAndIncrement())
+            .put("type", "call_service")
+            .put("domain", "light")
+            .put("service", if (turnOn) "turn_on" else "turn_off")
+            .put("target", JSONObject().put("entity_id", JSONArray(ids)))
+        socket.send(payload.toString())
     }
 
     fun createGuestVoucher() {
@@ -353,6 +386,18 @@ class HomeAssistantWebSocket(
         getStatesRequestId = statesId
         socket.send(JSONObject().put("id", statesId).put("type", "get_states").toString())
 
+        val areasId = nextId.getAndIncrement()
+        areaRegistryRequestId = areasId
+        socket.send(JSONObject().put("id", areasId).put("type", "config/area_registry/list").toString())
+
+        val devicesId = nextId.getAndIncrement()
+        deviceRegistryRequestId = devicesId
+        socket.send(JSONObject().put("id", devicesId).put("type", "config/device_registry/list").toString())
+
+        val entitiesId = nextId.getAndIncrement()
+        entityRegistryRequestId = entitiesId
+        socket.send(JSONObject().put("id", entitiesId).put("type", "config/entity_registry/list").toString())
+
         socket.send(
             JSONObject()
                 .put("id", nextId.getAndIncrement())
@@ -405,6 +450,13 @@ class HomeAssistantWebSocket(
                 if (itemEntityId.isNotBlank() && !itemFriendlyName.isNullOrBlank()) {
                     entityFriendlyNames[itemEntityId] = itemFriendlyName
                 }
+                if (itemEntityId.startsWith("light.")) {
+                    lightStates[itemEntityId] = LightEntityState(
+                        entityId = itemEntityId,
+                        friendlyName = itemFriendlyName ?: itemEntityId.substringAfter('.').replace('_', ' '),
+                        isOn = item.optString("state").equals("on", ignoreCase = true)
+                    )
+                }
                 when (itemEntityId) {
                     alarmEntityId -> {
                         alarmFound = true
@@ -414,8 +466,63 @@ class HomeAssistantWebSocket(
                 }
             }
             _state.value = _state.value.copy(guestVoucher = guestState)
+            rebuildLightAreas()
             if (!alarmFound) {
                 _state.value = _state.value.copy(errorMessage = "Selected alarm entity was not found")
+            }
+            return
+        }
+
+        if (requestId == areaRegistryRequestId) {
+            areaRegistryRequestId = null
+            if (message.optBoolean("success", false)) {
+                areaNames.clear()
+                val result = message.optJSONArray("result") ?: JSONArray()
+                for (index in 0 until result.length()) {
+                    val item = result.optJSONObject(index) ?: continue
+                    val areaId = item.optString("area_id")
+                    val name = item.optString("name")
+                    if (areaId.isNotBlank() && name.isNotBlank()) areaNames[areaId] = name
+                }
+                rebuildLightAreas()
+            }
+            return
+        }
+
+        if (requestId == deviceRegistryRequestId) {
+            deviceRegistryRequestId = null
+            if (message.optBoolean("success", false)) {
+                deviceAreaIds.clear()
+                val result = message.optJSONArray("result") ?: JSONArray()
+                for (index in 0 until result.length()) {
+                    val item = result.optJSONObject(index) ?: continue
+                    val deviceId = item.optString("id")
+                    val areaId = item.optString("area_id")
+                    if (deviceId.isNotBlank() && areaId.isNotBlank() && areaId != "null") {
+                        deviceAreaIds[deviceId] = areaId
+                    }
+                }
+                rebuildLightAreas()
+            }
+            return
+        }
+
+        if (requestId == entityRegistryRequestId) {
+            entityRegistryRequestId = null
+            if (message.optBoolean("success", false)) {
+                entityAreaIds.clear()
+                entityDeviceIds.clear()
+                val result = message.optJSONArray("result") ?: JSONArray()
+                for (index in 0 until result.length()) {
+                    val item = result.optJSONObject(index) ?: continue
+                    val entityId = item.optString("entity_id")
+                    if (!entityId.startsWith("light.")) continue
+                    val areaId = item.optString("area_id")
+                    val deviceId = item.optString("device_id")
+                    if (areaId.isNotBlank() && areaId != "null") entityAreaIds[entityId] = areaId
+                    if (deviceId.isNotBlank() && deviceId != "null") entityDeviceIds[entityId] = deviceId
+                }
+                rebuildLightAreas()
             }
             return
         }
@@ -500,6 +607,15 @@ class HomeAssistantWebSocket(
             _wakeEvents.tryEmit(Unit)
         }
 
+        if (entityId.startsWith("light.")) {
+            lightStates[entityId] = LightEntityState(
+                entityId = entityId,
+                friendlyName = friendlyName,
+                isOn = newValue.equals("on", ignoreCase = true)
+            )
+            rebuildLightAreas()
+        }
+
         if (entityId == guestVoucherSensorEntityId) {
             _state.value = _state.value.copy(
                 guestVoucher = parseGuestVoucherState(newState),
@@ -542,6 +658,26 @@ class HomeAssistantWebSocket(
         if (parsed.state in WAKE_ALARM_STATES) {
             _wakeEvents.tryEmit(Unit)
         }
+    }
+
+    private fun rebuildLightAreas() {
+        _lightAreas.value = lightStates.values
+            .groupBy { light ->
+                entityAreaIds[light.entityId]
+                    ?: entityDeviceIds[light.entityId]?.let { deviceAreaIds[it] }
+                    ?: ""
+            }
+            .map { (areaId, lights) ->
+                LightAreaState(
+                    areaId = areaId.ifBlank { "unassigned" },
+                    friendlyName = if (areaId.isBlank()) "Other" else areaNames[areaId] ?: areaId,
+                    lights = lights.sortedBy { it.friendlyName.lowercase() }
+                )
+            }
+            .sortedWith(
+                compareBy<LightAreaState> { it.areaId == "unassigned" }
+                    .thenBy { it.friendlyName.lowercase() }
+            )
     }
 
     private fun handleAlarmoReadyToArmModes(data: JSONObject) {
