@@ -17,8 +17,8 @@ android {
         applicationId = "dev.homepanel.app"
         minSdk = 25
         targetSdk = 37
-        versionCode = 26
-        versionName = "0.6.15"
+        versionCode = 27
+        versionName = "0.6.16"
     }
 
     buildFeatures {
