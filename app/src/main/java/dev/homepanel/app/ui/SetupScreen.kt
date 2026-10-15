@@ -125,6 +125,9 @@ fun SetupScreen(
     var kioskModeEnabled by rememberSaveable(initialSettings?.kioskModeEnabled) {
         mutableStateOf(initialSettings?.kioskModeEnabled ?: false)
     }
+    var interfaceLanguage by rememberSaveable(initialSettings?.interfaceLanguage) {
+        mutableStateOf(initialSettings?.interfaceLanguage ?: "en")
+    }
     var settingsPin by rememberSaveable(initialSettings?.settingsPin) {
         mutableStateOf(initialSettings?.settingsPin.orEmpty())
     }
@@ -232,6 +235,7 @@ fun SetupScreen(
         autoBrightnessEnabled = autoBrightnessEnabled,
         kioskModeEnabled = kioskModeEnabled,
         settingsPin = settingsPin,
+        interfaceLanguage = interfaceLanguage,
         updateChecksEnabled = updateChecksEnabled,
         weatherSource = weatherSource,
         weatherEntityId = weatherEntityId.takeIf { it.isNotBlank() },
@@ -277,7 +281,33 @@ fun SetupScreen(
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
                 Text(
-                    text = stringResource(R.string.system_locale_hint),
+                    "Idioma de la interfaz / Interface language",
+                    style = MaterialTheme.typography.titleMedium
+                )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    listOf("es" to "Español", "en" to "English").forEach { (code, label) ->
+                        Card(
+                            modifier = Modifier.weight(1f).clickable { interfaceLanguage = code }
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(12.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                RadioButton(
+                                    selected = interfaceLanguage == code,
+                                    onClick = { interfaceLanguage = code }
+                                )
+                                Text(label)
+                            }
+                        }
+                    }
+                }
+                Text(
+                    if (interfaceLanguage == "es") "El idioma se aplica al guardar."
+                    else "The language is applied when you save.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
