@@ -13,6 +13,7 @@ data class PanelSettings(
     val autoBrightnessEnabled: Boolean = true,
     val kioskModeEnabled: Boolean = false,
     val settingsPin: String = "",
+    val interfaceLanguage: String = "en",
     val updateChecksEnabled: Boolean = true,
     val weatherSource: String = "home_assistant",
     val weatherEntityId: String? = null,
