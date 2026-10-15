@@ -28,7 +28,10 @@ class MainActivity : ComponentActivity() {
             val localizedContext = remember(baseContext, language) {
                 val config = android.content.res.Configuration(baseContext.resources.configuration)
                 config.setLocale(Locale.forLanguageTag(language))
-                baseContext.createConfigurationContext(config)
+                val languageContext = baseContext.createConfigurationContext(config)
+                object : android.content.ContextWrapper(baseContext) {
+                    override fun getResources(): android.content.res.Resources = languageContext.resources
+                }
             }
             val localizedConfiguration = remember(localizedContext) {
                 android.content.res.Configuration(localizedContext.resources.configuration)
