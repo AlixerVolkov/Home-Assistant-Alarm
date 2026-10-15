@@ -78,6 +78,9 @@ import dev.homepanel.app.network.HomeZoneLocation
 import dev.homepanel.app.network.LightAreaState
 import dev.homepanel.app.network.PersonLocation
 import dev.homepanel.app.network.WeatherWarning
+import dev.homepanel.app.network.groupPeopleByZone
+import dev.homepanel.app.network.isHomeAssistantPerson
+import dev.homepanel.app.network.personZoneName
 import java.time.Instant
 import java.time.LocalDate
 import java.time.LocalDateTime
@@ -634,29 +637,26 @@ private fun HouseSummaryCard(
                     HomeMetricTile("💡", summary.lightsOn.toString(), "Lights on", summary.lightsOn > 0, Modifier.weight(1f))
                 }
 
-                val peopleHome = summary.persons
-                    .filter { it.entityType == "person" && it.entityId != "home" && it.entityId != "zone.home" && it.state.equals("home", ignoreCase = true) }
-                    .map { it.friendlyName }
-                val trackerCount = 0
+                val peopleByZone = summary.groupPeopleByZone()
                 Surface(shape = MaterialTheme.shapes.large, color = MaterialTheme.colorScheme.surfaceVariant) {
-                    Row(
+                    Column(
                         modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 10.dp),
-                        verticalAlignment = Alignment.CenterVertically
+                        verticalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
-                        Text("⌂", style = MaterialTheme.typography.titleLarge)
-                        Spacer(Modifier.width(10.dp))
-                        Column(modifier = Modifier.weight(1f)) {
+                        if (peopleByZone.isEmpty()) {
+                            Text("No people available", style = MaterialTheme.typography.bodyMedium)
+                        } else {
+                            peopleByZone.forEach { group ->
+                                Text(
+                                    group.displayText,
+                                    style = MaterialTheme.typography.titleSmall,
+                                    fontWeight = FontWeight.SemiBold
+                                )
+                            }
+                        }
+                        summary.temperatureC?.let { temperature ->
                             Text(
-                                if (peopleHome.isEmpty()) "Nobody marked at home" else peopleHome.joinToString(", "),
-                                style = MaterialTheme.typography.titleSmall,
-                                fontWeight = FontWeight.SemiBold
-                            )
-                            Text(
-                                buildString {
-                                    append(if (peopleHome.isEmpty()) "Presence available on map" else "At home")
-                                    if (trackerCount > 0) append(" · $trackerCount tracked device${if (trackerCount == 1) "" else "s"}")
-                                    summary.temperatureC?.let { append(" · ${String.format(Locale.getDefault(), "%.1f", it)}°C") }
-                                },
+                                "${String.format(Locale.getDefault(), "%.1f", temperature)}°C",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -676,7 +676,7 @@ private fun HouseSummaryCard(
                     if (lightAreas.isNotEmpty()) {
                         FilledTonalButton(onClick = onShowLights, modifier = Modifier.weight(1f)) { Text("💡  Lights") }
                     }
-                    if (summary.persons.isNotEmpty()) {
+                    if (summary.persons.any(::isHomeAssistantPerson)) {
                         FilledTonalButton(onClick = onShowMap, modifier = Modifier.weight(1f)) { Text("📍  Map") }
                     }
                 }
@@ -774,10 +774,9 @@ private fun PersonsMapDialog(
     zones: List<HomeZoneLocation>,
     onDismiss: () -> Unit
 ) {
-    val peopleOnly = persons.filter { it.entityType == "person" && it.entityId.startsWith("person.") }
+    val peopleOnly = persons.filter(::isHomeAssistantPerson)
     val located = peopleOnly.filter { it.latitude != null && it.longitude != null }
     var useOsmMap by remember { mutableStateOf(true) }
-    val relevantZones = emptyList<HomeZoneLocation>()
 
     Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
         Surface(
@@ -838,7 +837,6 @@ private fun PersonsMapDialog(
                         Card(modifier = Modifier.fillMaxWidth().weight(1f)) {
                             OsmPeopleMap(
                                 persons = located,
-                                zones = relevantZones,
                                 modifier = Modifier.fillMaxSize()
                             )
                         }
@@ -861,7 +859,7 @@ private fun PersonsMapDialog(
                     peopleOnly.forEach { person ->
                         val accuracy = person.gpsAccuracyMeters?.roundToInt()?.let { " · ±${it}m" }.orEmpty()
                         Text(
-                            "● ${person.friendlyName} — ${person.state}$accuracy",
+                            "● ${person.friendlyName} — ${personZoneName(person, zones)}$accuracy",
                             style = MaterialTheme.typography.bodyMedium
                         )
                     }
