@@ -207,50 +207,43 @@ fun AlarmScreen(
                 WeatherWarningsBanner(houseSummaryState.summary?.weatherWarnings.orEmpty())
 
                 Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .weight(1f),
+                    modifier = Modifier.fillMaxWidth().weight(1f),
                     horizontalArrangement = Arrangement.spacedBy(14.dp)
                 ) {
                     Column(
-                        modifier = Modifier
-                            .weight(1.25f)
-                            .fillMaxHeight(),
+                        modifier = Modifier.weight(1.5f).fillMaxHeight(),
                         verticalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
-                        AlarmStateCard(
-                            alarm = alarm,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .weight(0.72f)
-                        )
-                        AlarmActionsPanel(
-                            alarm = alarm,
-                            connectionState = connectionState,
-                            compact = false,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .weight(1.28f),
-                            onActionRequested = { action ->
-                                if (alarm?.requiresCode(action) == true) pinAction = action else onAction(action, null)
-                            }
-                        )
+                        Row(
+                            modifier = Modifier.fillMaxWidth().weight(0.8f),
+                            horizontalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            AlarmStateCard(alarm = alarm, modifier = Modifier.weight(0.9f).fillMaxHeight())
+                            AlarmActionsPanel(
+                                alarm = alarm,
+                                connectionState = connectionState,
+                                compact = false,
+                                modifier = Modifier.weight(1.1f).fillMaxHeight(),
+                                onActionRequested = { action ->
+                                    if (alarm?.requiresCode(action) == true) pinAction = action else onAction(action, null)
+                                }
+                            )
+                        }
+                        Column(modifier = Modifier.weight(1.2f).verticalScroll(rememberScrollState())) {
+                            HouseSummaryCard(
+                                state = houseSummaryState,
+                                lightAreas = lightAreas,
+                                onRefresh = onRefreshHouse,
+                                onShowMap = { showPeopleMap = true },
+                                onShowLights = { showLights = true }
+                            )
+                        }
                     }
-
                     Column(
-                        modifier = Modifier
-                            .weight(0.95f)
-                            .fillMaxHeight()
-                            .verticalScroll(rememberScrollState()),
+                        modifier = Modifier.weight(0.85f).fillMaxHeight().verticalScroll(rememberScrollState()),
                         verticalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
-                        HouseSummaryCard(
-                            state = houseSummaryState,
-                            lightAreas = lightAreas,
-                            onRefresh = onRefreshHouse,
-                            onShowMap = { showPeopleMap = true },
-                            onShowLights = { showLights = true }
-                        )
+                        ForecastStrip(weatherState, onRefreshWeather)
                         if (!settings.guestVoucherSensorEntityId.isNullOrBlank()) {
                             GuestWifiEntryCard(
                                 voucher = connectionState.guestVoucher,
@@ -259,7 +252,6 @@ fun AlarmScreen(
                                 onClick = { showGuestWifi = true }
                             )
                         }
-                        ForecastStrip(weatherState, onRefreshWeather)
                     }
                 }
             }
@@ -643,9 +635,9 @@ private fun HouseSummaryCard(
                 }
 
                 val peopleHome = summary.persons
-                    .filter { it.entityType == "person" && it.state.equals("home", ignoreCase = true) }
+                    .filter { it.entityType == "person" && it.entityId != "home" && it.entityId != "zone.home" && it.state.equals("home", ignoreCase = true) }
                     .map { it.friendlyName }
-                val trackerCount = summary.persons.count { it.entityType == "device_tracker" }
+                val trackerCount = 0
                 Surface(shape = MaterialTheme.shapes.large, color = MaterialTheme.colorScheme.surfaceVariant) {
                     Row(
                         modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 10.dp),
@@ -1368,27 +1360,24 @@ private fun AlarmActionsPanel(
     modifier: Modifier = Modifier,
     onActionRequested: (AlarmAction) -> Unit
 ) {
-    val actions = buildList {
-        add(AlarmAction.DISARM)
-        if (alarm?.supports(AlarmFeatures.ARM_HOME) == true) add(AlarmAction.ARM_HOME)
-        if (alarm?.supports(AlarmFeatures.ARM_AWAY) == true) add(AlarmAction.ARM_AWAY)
-        if (alarm?.supports(AlarmFeatures.ARM_NIGHT) == true) add(AlarmAction.ARM_NIGHT)
-        if (alarm?.supports(AlarmFeatures.ARM_VACATION) == true) add(AlarmAction.ARM_VACATION)
-        if (alarm?.supports(AlarmFeatures.ARM_CUSTOM_BYPASS) == true) add(AlarmAction.ARM_CUSTOM_BYPASS)
+    val armed = alarm?.state?.startsWith("armed_") == true
+    val actions = if (armed) {
+        listOf(AlarmAction.DISARM)
+    } else {
+        buildList {
+            if (alarm?.supports(AlarmFeatures.ARM_AWAY) == true) add(AlarmAction.ARM_AWAY)
+            if (alarm?.supports(AlarmFeatures.ARM_NIGHT) == true) add(AlarmAction.ARM_NIGHT)
+        }
     }
 
     val globallyEnabled = connectionState.status == ConnectionStatus.CONNECTED &&
         alarm != null && connectionState.pendingAction == null
 
     BoxWithConstraints(modifier = modifier) {
-        val columns = when {
-            maxWidth < 360.dp -> 2
-            maxWidth < 620.dp -> 3
-            else -> 3
-        }
+        val columns = if (compact) 2 else 1
         val rows = actions.chunked(columns)
 
-        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Column(modifier = if (compact) Modifier else Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             connectionState.pendingAction?.let { pending ->
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -1403,7 +1392,7 @@ private fun AlarmActionsPanel(
 
             rows.forEach { rowActions ->
                 Row(
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = if (compact) Modifier.fillMaxWidth() else Modifier.fillMaxWidth().weight(1f),
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     rowActions.forEach { action ->
@@ -1416,7 +1405,7 @@ private fun AlarmActionsPanel(
                             readiness = if (action == AlarmAction.DISARM) null else connectionState.readyToArmModes[action.targetState],
                             modifier = Modifier
                                 .weight(1f)
-                                .height(if (compact) 88.dp else 110.dp),
+                                .then(if (compact) Modifier.height(88.dp) else Modifier.fillMaxHeight()),
                             onClick = { onActionRequested(action) }
                         )
                     }
