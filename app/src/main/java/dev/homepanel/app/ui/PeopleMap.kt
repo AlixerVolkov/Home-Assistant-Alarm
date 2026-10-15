@@ -36,9 +36,9 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import dev.homepanel.app.R
-import dev.homepanel.app.network.HomeZoneLocation
 import dev.homepanel.app.network.OsmTileClient
 import dev.homepanel.app.network.PersonLocation
+import dev.homepanel.app.network.isHomeAssistantPerson
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
@@ -52,7 +52,6 @@ import kotlin.math.sin
 private const val TILE_SIZE = 256.0
 private const val MIN_ZOOM = 2
 private const val MAX_ZOOM = 18
-private const val EARTH_RADIUS_METERS = 6_378_137.0
 private const val PINCH_ZOOM_IN_THRESHOLD = 1.18f
 private const val PINCH_ZOOM_OUT_THRESHOLD = 0.84f
 
@@ -87,7 +86,6 @@ private data class RenderTile(
 @Composable
 fun OsmPeopleMap(
     persons: List<PersonLocation>,
-    zones: List<HomeZoneLocation>,
     modifier: Modifier = Modifier,
     allowNetwork: Boolean = true
 ) {
@@ -100,14 +98,13 @@ fun OsmPeopleMap(
     var pinchAccumulator by remember { mutableStateOf(1f) }
     var failedTiles by remember { mutableIntStateOf(0) }
 
-    val coordinates = remember(persons, zones) {
-        buildList {
-            persons.forEach { person ->
-                val lat = person.latitude
-                val lon = person.longitude
-                if (lat != null && lon != null) add(GeoPoint(lat, lon))
-            }
-            zones.forEach { add(GeoPoint(it.latitude, it.longitude)) }
+    // Neither zones (including Home) nor standalone device trackers are map pins.
+    val visiblePeople = remember(persons) { persons.filter(::isHomeAssistantPerson) }
+    val coordinates = remember(visiblePeople) {
+        visiblePeople.mapNotNull { person ->
+            val lat = person.latitude
+            val lon = person.longitude
+            if (lat != null && lon != null) GeoPoint(lat, lon) else null
         }
     }
 
@@ -152,10 +149,7 @@ fun OsmPeopleMap(
 
     val surface = MaterialTheme.colorScheme.surfaceVariant
     val grid = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.14f)
-    val zoneFill = MaterialTheme.colorScheme.primary.copy(alpha = 0.20f)
-    val zoneStroke = MaterialTheme.colorScheme.primary.copy(alpha = 0.72f)
     val personFill = MaterialTheme.colorScheme.tertiary
-    val trackerFill = MaterialTheme.colorScheme.secondary
     val personStroke = MaterialTheme.colorScheme.surface
     val labelBackground = MaterialTheme.colorScheme.surface.copy(alpha = 0.92f)
     val labelForeground = MaterialTheme.colorScheme.onSurface
@@ -199,35 +193,18 @@ fun OsmPeopleMap(
                 )
             }
 
-            zones.forEach { zone ->
-                val center = point(zone.latitude, zone.longitude)
-                val metersPerPixel = cos(Math.toRadians(zone.latitude)).coerceAtLeast(0.05) *
-                    2.0 * PI * EARTH_RADIUS_METERS /
-                    (TILE_SIZE * 2.0.pow(current.zoom.toDouble()))
-                val radiusPx = (zone.radiusMeters / metersPerPixel).toFloat().coerceIn(7f, 120f)
-                drawCircle(zoneFill, radiusPx, center)
-                drawCircle(
-                    zoneStroke,
-                    radiusPx,
-                    center,
-                    style = androidx.compose.ui.graphics.drawscope.Stroke(width = 2f)
-                )
-            }
-
-            persons.forEachIndexed { index, person ->
+            visiblePeople.forEachIndexed { index, person ->
                 val lat = person.latitude ?: return@forEachIndexed
                 val lon = person.longitude ?: return@forEachIndexed
                 val base = point(lat, lon)
-                val duplicateCount = persons.count { it.latitude == lat && it.longitude == lon }
+                val duplicateCount = visiblePeople.count { it.latitude == lat && it.longitude == lon }
                 val angle = (index % 8) * PI / 4.0
                 val displacement = if (duplicateCount > 1) {
                     Offset((cos(angle) * 18.0).toFloat(), (sin(angle) * 18.0).toFloat())
                 } else Offset.Zero
                 val center = base + displacement
-                val isTracker = person.entityType == "device_tracker"
-                val markerFill = if (isTracker) trackerFill else personFill
                 drawCircle(personStroke, radius = 15f, center = center)
-                drawCircle(markerFill, radius = 11f, center = center)
+                drawCircle(personFill, radius = 11f, center = center)
 
                 drawContext.canvas.nativeCanvas.apply {
                     val markerPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
@@ -236,13 +213,8 @@ fun OsmPeopleMap(
                         textAlign = Paint.Align.CENTER
                         typeface = Typeface.DEFAULT_BOLD
                     }
-                    val markerText = if (isTracker) {
-                        if (person.friendlyName.contains("bike", ignoreCase = true) ||
-                            person.entityId.contains("bike", ignoreCase = true)
-                        ) "B" else "T"
-                    } else {
-                        person.friendlyName.trim().firstOrNull()?.uppercaseChar()?.toString() ?: "P"
-                    }
+                    val markerText = person.friendlyName.trim().firstOrNull()
+                        ?.uppercaseChar()?.toString() ?: "P"
                     drawText(markerText, center.x, center.y + 5f, markerPaint)
 
                     val labelPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
@@ -286,7 +258,7 @@ fun OsmPeopleMap(
                     pinchAccumulator = 1f
                 },
                 modifier = Modifier.size(48.dp)
-            ) { Text("⌂") }
+            ) { Text("◎") }
         }
 
         if (failedTiles > 0 && visibleTiles.none { tiles.containsKey(it.id) }) {
