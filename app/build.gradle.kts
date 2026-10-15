@@ -76,6 +76,7 @@ dependencies {
     implementation("androidx.datastore:datastore-preferences:1.2.1")
     implementation("com.squareup.okhttp3:okhttp:5.1.0")
     implementation("org.eclipse.paho:org.eclipse.paho.client.mqttv3:1.2.5")
+    testImplementation("junit:junit:4.13.2")
 
     // Front-camera RTSP server (video-only).
     implementation("com.github.pedroSG94:RTSP-Server:1.4.2")
