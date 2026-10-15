@@ -48,9 +48,9 @@ private val HomePanelLightColors = lightColorScheme(
     onTertiary = Color.White,
     tertiaryContainer = Color(0xFFFFDEA7),
     onTertiaryContainer = Color(0xFF291800),
-    background = Color(0xFFF4F7FB),
+    background = Color.White,
     onBackground = Color(0xFF171C22),
-    surface = Color(0xFFFCFCFF),
+    surface = Color.White,
     onSurface = Color(0xFF171C22),
     surfaceVariant = Color(0xFFE7ECF2),
     onSurfaceVariant = Color(0xFF414A55),
@@ -70,7 +70,7 @@ private val HomePanelShapes = Shapes(
 @Composable
 fun HomePanelTheme(content: @Composable () -> Unit) {
     MaterialTheme(
-        colorScheme = if (isSystemInDarkTheme()) HomePanelDarkColors else HomePanelLightColors,
+        colorScheme = HomePanelLightColors,
         typography = Typography(),
         shapes = HomePanelShapes,
         content = content
