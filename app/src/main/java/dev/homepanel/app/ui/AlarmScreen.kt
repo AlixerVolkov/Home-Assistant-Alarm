@@ -844,7 +844,6 @@ private fun PersonsMapDialog(
                         Card(modifier = Modifier.fillMaxWidth().weight(1f)) {
                             OsmPeopleMap(
                                 persons = located,
-                                zones = relevantZones,
                                 modifier = Modifier.fillMaxSize(),
                                 allowNetwork = false
                             )
