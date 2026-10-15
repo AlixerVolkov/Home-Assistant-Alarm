@@ -17,8 +17,8 @@ android {
         applicationId = "dev.homepanel.app"
         minSdk = 25
         targetSdk = 37
-        versionCode = 32
-        versionName = "0.6.21"
+        versionCode = 33
+        versionName = "0.6.22"
     }
 
     buildFeatures {
@@ -76,6 +76,7 @@ dependencies {
     implementation("androidx.datastore:datastore-preferences:1.2.1")
     implementation("com.squareup.okhttp3:okhttp:5.1.0")
     implementation("org.eclipse.paho:org.eclipse.paho.client.mqttv3:1.2.5")
+    testImplementation("junit:junit:4.13.2")
 
     // Front-camera RTSP server (video-only).
     implementation("com.github.pedroSG94:RTSP-Server:1.4.2")
