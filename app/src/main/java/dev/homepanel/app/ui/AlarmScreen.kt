@@ -774,14 +774,10 @@ private fun PersonsMapDialog(
     zones: List<HomeZoneLocation>,
     onDismiss: () -> Unit
 ) {
-    val located = persons.filter { it.latitude != null && it.longitude != null }
+    val peopleOnly = persons.filter { it.entityType == "person" && it.entityId.startsWith("person.") }
+    val located = peopleOnly.filter { it.latitude != null && it.longitude != null }
     var useOsmMap by remember { mutableStateOf(true) }
-    val occupiedStates = persons.map { it.state.lowercase() }.toSet()
-    val relevantZones = zones.filter { zone ->
-        zone.entityId == "zone.home" ||
-            zone.friendlyName.lowercase() in occupiedStates ||
-            zone.entityId.removePrefix("zone.").lowercase() in occupiedStates
-    }
+    val relevantZones = emptyList<HomeZoneLocation>()
 
     Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
         Surface(
@@ -862,7 +858,7 @@ private fun PersonsMapDialog(
                     modifier = Modifier.fillMaxWidth().heightIn(max = 180.dp).verticalScroll(rememberScrollState()),
                     verticalArrangement = Arrangement.spacedBy(5.dp)
                 ) {
-                    persons.forEach { person ->
+                    peopleOnly.forEach { person ->
                         val accuracy = person.gpsAccuracyMeters?.roundToInt()?.let { " · ±${it}m" }.orEmpty()
                         Text(
                             "● ${person.friendlyName} — ${person.state}$accuracy",
