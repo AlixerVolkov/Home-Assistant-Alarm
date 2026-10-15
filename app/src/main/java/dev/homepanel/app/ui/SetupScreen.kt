@@ -13,6 +13,7 @@ import android.hardware.Sensor
 import android.hardware.SensorEvent
 import android.hardware.SensorEventListener
 import android.hardware.SensorManager
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -249,7 +250,7 @@ fun SetupScreen(
         mqttTls = mqttTls
     )
 
-    BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
+    BoxWithConstraints(modifier = Modifier.fillMaxSize().background(androidx.compose.ui.graphics.Color.White)) {
         val horizontalPadding = if (maxWidth < 600.dp) 16.dp else 32.dp
         val compactDisplaySettings = maxWidth < 520.dp
 
