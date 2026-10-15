@@ -43,7 +43,6 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
 import kotlin.math.PI
-import kotlin.math.cos
 import kotlin.math.floor
 import kotlin.math.ln
 import kotlin.math.pow
@@ -193,16 +192,18 @@ fun OsmPeopleMap(
                 )
             }
 
-            visiblePeople.forEachIndexed { index, person ->
+            visiblePeople.forEachIndexed { _, person ->
                 val lat = person.latitude ?: return@forEachIndexed
                 val lon = person.longitude ?: return@forEachIndexed
                 val base = point(lat, lon)
-                val duplicateCount = visiblePeople.count { it.latitude == lat && it.longitude == lon }
-                val angle = (index % 8) * PI / 4.0
-                val displacement = if (duplicateCount > 1) {
-                    Offset((cos(angle) * 18.0).toFloat(), (sin(angle) * 18.0).toFloat())
-                } else Offset.Zero
-                val center = base + displacement
+                // Keep both the marker and the full-name label legible when people
+                // share exactly the same position (e.g. everyone at Casa).
+                val colocated = visiblePeople.filter { it.latitude == lat && it.longitude == lon }
+                val place = colocated.indexOfFirst { it.entityId == person.entityId }.coerceAtLeast(0)
+                val verticalShift = if (colocated.size > 1) {
+                    (place - (colocated.size - 1) / 2f) * 44f
+                } else 0f
+                val center = base + Offset(0f, verticalShift)
                 drawCircle(personStroke, radius = 15f, center = center)
                 drawCircle(personFill, radius = 11f, center = center)
 
