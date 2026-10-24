@@ -143,6 +143,7 @@ class HomeAssistantRestClient(
             val trackers = mutableListOf<PersonLocation>()
             val zones = mutableListOf<HomeZoneLocation>()
             val warnings = mutableListOf<WeatherWarning>()
+            val structuredWarningEntities = mutableSetOf<String>()
 
             for (index in 0 until states.length()) {
                 val item = states.optJSONObject(index) ?: continue
@@ -202,7 +203,32 @@ class HomeAssistantRestClient(
                     }
                 }
 
-                if (domain == "binary_sensor" && isWeatherWarningEntity(entityId, attributes)) {
+                val activeArray = attributes?.optJSONArray("warnings")
+                if (activeArray != null) {
+                    structuredWarningEntities += entityId
+                    warnings += parseStructuredWarnings(
+                        sourceEntityId = entityId,
+                        sourceFriendlyName = name,
+                        items = activeArray,
+                        upcoming = false
+                    )
+                }
+
+                val nextArray = attributes?.optJSONArray("next_warnings")
+                if (nextArray != null) {
+                    structuredWarningEntities += entityId
+                    warnings += parseStructuredWarnings(
+                        sourceEntityId = entityId,
+                        sourceFriendlyName = name,
+                        items = nextArray,
+                        upcoming = true
+                    )
+                }
+
+                if (domain == "binary_sensor" &&
+                    isWeatherWarningEntity(entityId, attributes) &&
+                    entityId !in structuredWarningEntities
+                ) {
                     val active = state !in INACTIVE_WARNING_STATES
                     warnings += WeatherWarning(
                         entityId = entityId,
@@ -211,6 +237,7 @@ class HomeAssistantRestClient(
                         severity = firstAttribute(attributes, "severity", "awareness_level", "level"),
                         title = firstAttribute(attributes, "headline", "event", "awareness_type", "title") ?: name,
                         description = firstAttribute(attributes, "description", "message", "instruction"),
+                        startsAt = firstAttribute(attributes, "starts", "start", "start_time"),
                         expiresAt = firstAttribute(attributes, "expires", "end", "end_time")
                     )
                 }
@@ -275,7 +302,13 @@ class HomeAssistantRestClient(
                 temperatureC = preferredTemperature?.third,
                 temperatureName = preferredTemperature?.second,
                 openEntityNames = openNames,
-                weatherWarnings = warnings.sortedWith(compareByDescending<WeatherWarning> { it.active }.thenBy { it.friendlyName.lowercase() }),
+                weatherWarnings = warnings
+                    .distinctBy { listOf(it.slug, it.startsAt, it.expiresAt, it.active, it.upcoming) }
+                    .sortedWith(
+                        compareByDescending<WeatherWarning> { it.active }
+                            .thenBy { !it.upcoming }
+                            .thenBy { it.startsAt.orEmpty() }
+                    ),
                 persons = mappedLocations,
                 zones = zones.sortedBy { it.friendlyName.lowercase() }
             )
@@ -436,6 +469,57 @@ class HomeAssistantRestClient(
         "hail" -> 96
         "lightning", "lightning-rainy" -> 95
         else -> 3
+    }
+
+    private fun parseStructuredWarnings(
+        sourceEntityId: String,
+        sourceFriendlyName: String,
+        items: JSONArray,
+        upcoming: Boolean
+    ): List<WeatherWarning> = buildList {
+        for (index in 0 until items.length()) {
+            val item = items.optJSONObject(index) ?: continue
+            val slug = item.optString("slug").takeIf { it.isNotBlank() && it != "null" }
+            val friendlyName = item.optString("friendly_name")
+                .takeIf { it.isNotBlank() && it != "null" }
+                ?: sourceFriendlyName
+            val isActive = item.optBoolean("is_active", !upcoming)
+            val level = when {
+                item.has("level") && !item.isNull("level") -> item.optInt("level")
+                else -> null
+            }
+            val startsAt = item.optString("starts_at").takeIf { it.isNotBlank() && it != "null" }
+            val endsAt = item.optString("ends_at").takeIf { it.isNotBlank() && it != "null" }
+            val title = weatherWarningDisplayName(slug, friendlyName)
+
+            add(
+                WeatherWarning(
+                    entityId = "$sourceEntityId#$index",
+                    friendlyName = friendlyName,
+                    active = isActive,
+                    severity = level?.let { "Level $it" },
+                    title = title,
+                    description = null,
+                    startsAt = startsAt,
+                    expiresAt = endsAt,
+                    slug = slug,
+                    level = level,
+                    upcoming = upcoming && !isActive
+                )
+            )
+        }
+    }
+
+    private fun weatherWarningDisplayName(slug: String?, fallback: String): String = when (slug?.lowercase()) {
+        "rain" -> "🌧️ Heavy rain"
+        "wind" -> "💨 Strong wind"
+        "fog" -> "🌫️ Fog"
+        "thunderstorm", "thunder" -> "⛈️ Thunderstorm"
+        "snow" -> "❄️ Snow"
+        "ice" -> "🧊 Ice"
+        "heat" -> "🌡️ Extreme heat"
+        "cold" -> "🥶 Extreme cold"
+        else -> fallback
     }
 
     private fun isWeatherWarningEntity(entityId: String, attributes: JSONObject?): Boolean {
