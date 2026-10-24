@@ -497,7 +497,7 @@ class HomeAssistantRestClient(
                     entityId = "$sourceEntityId#$index",
                     friendlyName = friendlyName,
                     active = isActive,
-                    severity = level?.let { "Level $it" },
+                    severity = null,
                     title = title,
                     description = null,
                     startsAt = startsAt,
@@ -511,14 +511,14 @@ class HomeAssistantRestClient(
     }
 
     private fun weatherWarningDisplayName(slug: String?, fallback: String): String = when (slug?.lowercase()) {
-        "rain" -> "🌧️ Heavy rain"
-        "wind" -> "💨 Strong wind"
-        "fog" -> "🌫️ Fog"
-        "thunderstorm", "thunder" -> "⛈️ Thunderstorm"
-        "snow" -> "❄️ Snow"
-        "ice" -> "🧊 Ice"
-        "heat" -> "🌡️ Extreme heat"
-        "cold" -> "🥶 Extreme cold"
+        "rain" -> "🌧️ Lluvia intensa"
+        "wind" -> "💨 Viento fuerte"
+        "fog" -> "🌫️ Niebla"
+        "thunderstorm", "thunder" -> "⛈️ Tormenta"
+        "snow" -> "❄️ Nieve"
+        "ice" -> "🧊 Hielo"
+        "heat" -> "🌡️ Calor extremo"
+        "cold" -> "🥶 Frío extremo"
         else -> fallback
     }
 
