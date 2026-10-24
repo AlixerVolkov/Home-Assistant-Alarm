@@ -121,9 +121,10 @@ fun AlarmScreen(
     var showLights by remember { mutableStateOf(false) }
     var showWeatherAlert by remember { mutableStateOf(false) }
 
-    val activeWeatherWarnings = houseSummaryState.summary?.weatherWarnings.orEmpty().filter { it.active }
+    val weatherWarnings = houseSummaryState.summary?.weatherWarnings.orEmpty()
+    val activeWeatherWarnings = weatherWarnings.filter { it.active }
     val activeWeatherWarningKey = activeWeatherWarnings.joinToString("|") { warning ->
-        "${warning.entityId}:${warning.severity.orEmpty()}:${warning.expiresAt.orEmpty()}"
+        "${warning.entityId}:${warning.level ?: warning.severity.orEmpty()}:${warning.startsAt.orEmpty()}:${warning.expiresAt.orEmpty()}"
     }
 
     LaunchedEffect(activeWeatherWarningKey) {
@@ -303,7 +304,7 @@ fun AlarmScreen(
 
     if (showWeatherAlert && activeWeatherWarnings.isNotEmpty()) {
         WeatherWarningDialog(
-            warnings = activeWeatherWarnings,
+            warnings = weatherWarnings,
             onDismiss = { showWeatherAlert = false }
         )
     }
@@ -439,57 +440,75 @@ private fun ContextStatusBanner(alarm: AlarmEntityState?) {
 @Composable
 private fun WeatherWarningsBanner(warnings: List<WeatherWarning>) {
     val active = warnings.filter { it.active }
-    if (active.isEmpty()) return
+    val upcoming = warnings.filter { it.upcoming && !it.active }
+    if (active.isEmpty() && upcoming.isEmpty()) return
+
+    val containerColor = if (active.isNotEmpty()) {
+        MaterialTheme.colorScheme.errorContainer
+    } else {
+        MaterialTheme.colorScheme.tertiaryContainer
+    }
 
     Surface(
         modifier = Modifier.fillMaxWidth(),
-        color = MaterialTheme.colorScheme.errorContainer,
+        color = containerColor,
         shape = MaterialTheme.shapes.large
     ) {
         Column(
-            modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
-            verticalArrangement = Arrangement.spacedBy(6.dp)
+            modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text("⚠️", style = MaterialTheme.typography.titleLarge)
-                Text(
-                    stringResource(R.string.weather_warnings_title),
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold
-                )
-                Spacer(Modifier.weight(1f))
-                Text(active.size.toString(), style = MaterialTheme.typography.labelLarge)
-            }
-            active.take(3).forEach { warning ->
-                Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Text(if (active.isNotEmpty()) "🚨" else "⚠️", style = MaterialTheme.typography.titleLarge)
+                Column(modifier = Modifier.weight(1f)) {
                     Text(
-                        warning.title ?: warning.friendlyName,
-                        style = MaterialTheme.typography.bodyMedium,
-                        fontWeight = FontWeight.SemiBold
+                        if (active.isNotEmpty()) "Alertas meteorológicas activas" else "Próximas alertas meteorológicas",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold
                     )
-                    warning.severity?.let {
-                        Text(
-                            stringResource(R.string.weather_warning_severity, it),
-                            style = MaterialTheme.typography.labelSmall
-                        )
-                    }
-                    warning.description?.let {
-                        Text(it, style = MaterialTheme.typography.bodySmall)
-                    }
-                    warning.expiresAt?.let { expires ->
-                        Text(
-                            stringResource(R.string.weather_warning_expires, formatWarningTime(expires)),
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onErrorContainer
-                        )
-                    }
+                    Text(
+                        buildString {
+                            if (active.isNotEmpty()) append("${active.size} activa${if (active.size == 1) "" else "s"}")
+                            if (active.isNotEmpty() && upcoming.isNotEmpty()) append(" · ")
+                            if (upcoming.isNotEmpty()) append("${upcoming.size} próxima${if (upcoming.size == 1) "" else "s"}")
+                        },
+                        style = MaterialTheme.typography.labelMedium
+                    )
                 }
             }
-            if (active.size > 3) {
+
+            (active + upcoming).take(3).forEach { warning ->
+                WeatherWarningCompactRow(warning)
+            }
+        }
+    }
+}
+
+@Composable
+private fun WeatherWarningCompactRow(warning: WeatherWarning) {
+    Surface(
+        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.72f),
+        shape = MaterialTheme.shapes.medium
+    ) {
+        Column(
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 9.dp),
+            verticalArrangement = Arrangement.spacedBy(3.dp)
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
-                    stringResource(R.string.weather_warning_more, active.size - 3),
-                    style = MaterialTheme.typography.labelSmall
+                    warning.title ?: warning.friendlyName,
+                    modifier = Modifier.weight(1f),
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.SemiBold
                 )
+                warning.level?.let { level ->
+                    Text("Nivel $level", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
+                } ?: warning.severity?.let {
+                    Text(it, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
+                }
+            }
+            warningTimeRange(warning)?.let { range ->
+                Text("🕒 $range", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
     }
@@ -500,13 +519,15 @@ private fun WeatherWarningDialog(
     warnings: List<WeatherWarning>,
     onDismiss: () -> Unit
 ) {
+    val active = warnings.filter { it.active }
+    val upcoming = warnings.filter { it.upcoming && !it.active }
     Dialog(
         onDismissRequest = onDismiss,
         properties = DialogProperties(usePlatformDefaultWidth = false)
     ) {
         Surface(
             modifier = Modifier.fillMaxWidth(0.92f).fillMaxHeight(0.82f),
-            color = MaterialTheme.colorScheme.errorContainer,
+            color = MaterialTheme.colorScheme.surface,
             shape = MaterialTheme.shapes.extraLarge,
             tonalElevation = 8.dp
         ) {
@@ -517,14 +538,14 @@ private fun WeatherWarningDialog(
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text("⚠️", style = MaterialTheme.typography.displaySmall)
                     Column(modifier = Modifier.weight(1f).padding(start = 12.dp)) {
+                        Text("Alertas meteorológicas · Ekeren", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
                         Text(
-                            stringResource(R.string.weather_warning_context_title),
-                            style = MaterialTheme.typography.headlineMedium,
-                            fontWeight = FontWeight.Bold
-                        )
-                        Text(
-                            stringResource(R.string.weather_warning_context_subtitle, warnings.size),
-                            style = MaterialTheme.typography.bodyMedium
+                            buildString {
+                                append("${active.size} activa${if (active.size == 1) "" else "s"}")
+                                if (upcoming.isNotEmpty()) append(" · ${upcoming.size} próxima${if (upcoming.size == 1) "" else "s"}")
+                            },
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
                     TextButton(onClick = onDismiss) { Text(stringResource(R.string.close)) }
@@ -532,56 +553,63 @@ private fun WeatherWarningDialog(
 
                 Column(
                     modifier = Modifier.weight(1f).verticalScroll(rememberScrollState()),
-                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                    verticalArrangement = Arrangement.spacedBy(14.dp)
                 ) {
-                    warnings.forEach { warning ->
-                        Card(
-                            modifier = Modifier.fillMaxWidth(),
-                            colors = CardDefaults.cardColors(
-                                containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.92f)
-                            )
-                        ) {
-                            Column(
-                                modifier = Modifier.padding(16.dp),
-                                verticalArrangement = Arrangement.spacedBy(6.dp)
-                            ) {
-                                Text(
-                                    warning.title ?: warning.friendlyName,
-                                    style = MaterialTheme.typography.titleLarge,
-                                    fontWeight = FontWeight.Bold
-                                )
-                                warning.severity?.let { severity ->
-                                    Text(
-                                        stringResource(R.string.weather_warning_severity, severity),
-                                        style = MaterialTheme.typography.titleSmall,
-                                        color = MaterialTheme.colorScheme.error
-                                    )
-                                }
-                                warning.expiresAt?.let { expires ->
-                                    Text(
-                                        stringResource(R.string.weather_warning_expires, formatWarningTime(expires)),
-                                        style = MaterialTheme.typography.bodyMedium
-                                    )
-                                }
-                                warning.description?.let { description ->
-                                    Text(description, style = MaterialTheme.typography.bodyMedium)
-                                }
-                                Text(
-                                    warning.entityId,
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                            }
-                        }
+                    if (active.isNotEmpty()) {
+                        WeatherWarningSectionTitle("🚨 Alertas activas")
+                        active.forEach { WeatherWarningDetailCard(it, true) }
+                    }
+                    if (upcoming.isNotEmpty()) {
+                        WeatherWarningSectionTitle("⚠️ Próximas alertas")
+                        upcoming.forEach { WeatherWarningDetailCard(it, false) }
                     }
                 }
-
-                Text(
-                    stringResource(R.string.weather_warning_context_hint),
-                    style = MaterialTheme.typography.bodySmall
-                )
             }
         }
+    }
+}
+
+@Composable
+private fun WeatherWarningSectionTitle(text: String) {
+    Text(text, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+}
+
+@Composable
+private fun WeatherWarningDetailCard(warning: WeatherWarning, active: Boolean) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(
+            containerColor = if (active) MaterialTheme.colorScheme.errorContainer else MaterialTheme.colorScheme.tertiaryContainer
+        )
+    ) {
+        Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    warning.title ?: warning.friendlyName,
+                    modifier = Modifier.weight(1f),
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Bold
+                )
+                warning.level?.let { Text("Nivel $it", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold) }
+            }
+            warningTimeRange(warning)?.let {
+                Text("🕒 $it", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
+            }
+            warning.description?.takeIf { it.isNotBlank() }?.let {
+                Text(it, style = MaterialTheme.typography.bodyMedium)
+            }
+        }
+    }
+}
+
+private fun warningTimeRange(warning: WeatherWarning): String? {
+    val start = warning.startsAt?.let(::formatWarningTime)
+    val end = warning.expiresAt?.let(::formatWarningTime)
+    return when {
+        start != null && end != null -> "$start → $end"
+        start != null -> "Desde $start"
+        end != null -> "Hasta $end"
+        else -> null
     }
 }
 
