@@ -7,7 +7,11 @@ data class WeatherWarning(
     val severity: String? = null,
     val title: String? = null,
     val description: String? = null,
-    val expiresAt: String? = null
+    val startsAt: String? = null,
+    val expiresAt: String? = null,
+    val slug: String? = null,
+    val level: Int? = null,
+    val upcoming: Boolean = false
 )
 
 data class PersonLocation(
