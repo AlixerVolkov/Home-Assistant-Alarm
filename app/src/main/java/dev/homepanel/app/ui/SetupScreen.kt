@@ -163,6 +163,15 @@ fun SetupScreen(
     var guestQrImage by rememberSaveable(initialSettings?.guestQrImageEntityId) {
         mutableStateOf(initialSettings?.guestQrImageEntityId.orEmpty())
     }
+    var doorbellCameraEntityId by rememberSaveable(initialSettings?.doorbellCameraEntityId) {
+        mutableStateOf(initialSettings?.doorbellCameraEntityId.orEmpty())
+    }
+    var doorbellTriggerEntityId by rememberSaveable(initialSettings?.doorbellTriggerEntityId) {
+        mutableStateOf(initialSettings?.doorbellTriggerEntityId.orEmpty())
+    }
+    var doorbellAutoCloseSeconds by rememberSaveable(initialSettings?.doorbellAutoCloseSeconds) {
+        mutableStateOf((initialSettings?.doorbellAutoCloseSeconds ?: 30).toString())
+    }
     var mqttDiscoveryEnabled by rememberSaveable(initialSettings?.mqttDiscoveryEnabled) {
         mutableStateOf(initialSettings?.mqttDiscoveryEnabled ?: false)
     }
@@ -246,6 +255,9 @@ fun SetupScreen(
         guestCreateButtonEntityId = guestCreateButton.takeIf { it.isNotBlank() },
         guestDeleteButtonEntityId = guestDeleteButton.takeIf { it.isNotBlank() },
         guestQrImageEntityId = guestQrImage.takeIf { it.isNotBlank() },
+        doorbellCameraEntityId = doorbellCameraEntityId.takeIf { it.isNotBlank() },
+        doorbellTriggerEntityId = doorbellTriggerEntityId.takeIf { it.isNotBlank() },
+        doorbellAutoCloseSeconds = doorbellAutoCloseSeconds.toIntOrNull() ?: 30,
         mqttDiscoveryEnabled = mqttDiscoveryEnabled,
         mqttHost = mqttHost,
         mqttPort = mqttPort.toIntOrNull() ?: if (mqttTls) 8883 else 1883,
@@ -640,6 +652,45 @@ fun SetupScreen(
                         enabled = wakeManualEntity.isNotBlank()
                     ) { Text(stringResource(R.string.add)) }
                 }
+
+                HorizontalDivider()
+
+                Text("Doorbell camera", style = MaterialTheme.typography.titleMedium)
+                Text(
+                    "Automatically show a selected Home Assistant camera when the configured doorbell sensor becomes active.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+
+                EntityCombo(
+                    selectedId = doorbellCameraEntityId,
+                    choices = discoveryState.cameras.map { it.entityId to "${it.friendlyName} · ${it.state}" },
+                    onSelected = { doorbellCameraEntityId = it },
+                    label = "Camera"
+                )
+
+                EntityCombo(
+                    selectedId = doorbellTriggerEntityId,
+                    choices = discoveryState.wakeSensors.map {
+                        it.entityId to buildString {
+                            append(it.friendlyName)
+                            it.deviceClass?.let { deviceClass -> append(" · ").append(deviceClass) }
+                            append(" · ").append(it.state)
+                        }
+                    },
+                    onSelected = { doorbellTriggerEntityId = it },
+                    label = "Doorbell trigger sensor"
+                )
+
+                OutlinedTextField(
+                    value = doorbellAutoCloseSeconds,
+                    onValueChange = { value -> doorbellAutoCloseSeconds = value.filter(Char::isDigit).take(3) },
+                    modifier = Modifier.fillMaxWidth(),
+                    label = { Text("Auto-close after (seconds)") },
+                    supportingText = { Text("The camera view refreshes automatically and closes after this timeout.") },
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
+                )
 
                 OutlinedButton(
                     onClick = { showHardwareDiagnostics = true },
