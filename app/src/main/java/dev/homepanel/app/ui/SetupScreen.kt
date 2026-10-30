@@ -665,8 +665,9 @@ fun SetupScreen(
                 EntityCombo(
                     selectedId = doorbellCameraEntityId,
                     choices = discoveryState.cameras.map { it.entityId to "${it.friendlyName} · ${it.state}" },
-                    onSelected = { doorbellCameraEntityId = it },
-                    label = "Camera"
+                    emptyLabel = "Select camera",
+                    noneLabel = "Disabled",
+                    onSelect = { doorbellCameraEntityId = it }
                 )
 
                 EntityCombo(
@@ -678,8 +679,9 @@ fun SetupScreen(
                             append(" · ").append(it.state)
                         }
                     },
-                    onSelected = { doorbellTriggerEntityId = it },
-                    label = "Doorbell trigger sensor"
+                    emptyLabel = "Select doorbell trigger sensor",
+                    noneLabel = "Disabled",
+                    onSelect = { doorbellTriggerEntityId = it }
                 )
 
                 OutlinedTextField(
