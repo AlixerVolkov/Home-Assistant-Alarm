@@ -46,6 +46,7 @@ class HomeAssistantWebSocket(
     private var accessToken: String = ""
     private var alarmEntityId: String = ""
     private var wakeEntityIds: Set<String> = emptySet()
+    private var monitoredEntityIds: Set<String> = emptySet()
     private var guestVoucherSensorEntityId: String? = null
     private var guestCreateButtonEntityId: String? = null
     private var guestDeleteButtonEntityId: String? = null
@@ -61,6 +62,7 @@ class HomeAssistantWebSocket(
         token: String,
         entityId: String,
         wakeEntityIds: Collection<String> = emptyList(),
+        monitoredEntityIds: Collection<String> = emptyList(),
         guestVoucherSensorEntityId: String? = null,
         guestCreateButtonEntityId: String? = null,
         guestDeleteButtonEntityId: String? = null
@@ -69,6 +71,7 @@ class HomeAssistantWebSocket(
         accessToken = token.trim()
         alarmEntityId = entityId.trim()
         this.wakeEntityIds = wakeEntityIds.map(String::trim).filter(String::isNotBlank).toSet()
+        this.monitoredEntityIds = monitoredEntityIds.map(String::trim).filter(String::isNotBlank).toSet()
         this.guestVoucherSensorEntityId = guestVoucherSensorEntityId?.trim()?.takeIf { it.isNotBlank() }
         this.guestCreateButtonEntityId = guestCreateButtonEntityId?.trim()?.takeIf { it.isNotBlank() }
         this.guestDeleteButtonEntityId = guestDeleteButtonEntityId?.trim()?.takeIf { it.isNotBlank() }
@@ -599,7 +602,7 @@ class HomeAssistantWebSocket(
         if (entityId.isNotBlank()) entityFriendlyNames[entityId] = friendlyName
         val deviceClass = attributes?.optString("device_class")
             ?.takeIf { it.isNotBlank() && it != "null" }
-        if (shouldPublishEntityEvent(entityId, deviceClass)) {
+        if (entityId in monitoredEntityIds || shouldPublishEntityEvent(entityId, deviceClass)) {
             _entityEvents.tryEmit(HomeEntityEvent(entityId, friendlyName, newValue, deviceClass))
         }
 
