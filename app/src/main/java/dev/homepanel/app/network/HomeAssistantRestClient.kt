@@ -39,6 +39,7 @@ class HomeAssistantRestClient(
             val alarms = mutableListOf<AlarmEntitySummary>()
             val wakeSensors = mutableListOf<WakeSensorSummary>()
             val weatherEntities = mutableListOf<WeatherEntitySummary>()
+            val cameras = mutableListOf<CameraEntitySummary>()
 
             stateByEntityId.forEach { (entityId, item) ->
                 val attributes = item.optJSONObject("attributes")
@@ -61,6 +62,14 @@ class HomeAssistantRestClient(
                         entityId = entityId,
                         friendlyName = friendlyName,
                         condition = item.optString("state", "unknown")
+                    )
+                }
+
+                if (entityId.startsWith("camera.")) {
+                    cameras += CameraEntitySummary(
+                        entityId = entityId,
+                        friendlyName = friendlyName,
+                        state = item.optString("state", "unknown")
                     )
                 }
 
@@ -115,7 +124,8 @@ class HomeAssistantRestClient(
                     )
                 ),
                 guestWifi = guestWifi,
-                weatherEntities = weatherEntities.sortedBy { it.friendlyName.lowercase() }
+                weatherEntities = weatherEntities.sortedBy { it.friendlyName.lowercase() },
+                cameras = cameras.sortedBy { it.friendlyName.lowercase() }
             )
         }
     }
@@ -538,6 +548,25 @@ class HomeAssistantRestClient(
         return null
     }
 
+    suspend fun fetchCameraImage(
+        baseUrl: String,
+        accessToken: String,
+        cameraEntityId: String
+    ): ByteArray = withContext(Dispatchers.IO) {
+        val request = authenticatedRequest(
+            url = HomeAssistantUrl.restUrl(baseUrl, "api/camera_proxy/${cameraEntityId.trim()}"),
+            accessToken = accessToken
+        ).get().build()
+
+        client.newCall(request).execute().use { response ->
+            if (!response.isSuccessful) error("Home Assistant camera returned HTTP ${response.code}")
+            val contentType = response.header("Content-Type").orEmpty()
+            if (!contentType.startsWith("image/", ignoreCase = true)) {
+                error("Home Assistant did not return a camera image")
+            }
+            response.body.bytes()
+        }
+    }
     suspend fun fetchImage(
         baseUrl: String,
         accessToken: String,
