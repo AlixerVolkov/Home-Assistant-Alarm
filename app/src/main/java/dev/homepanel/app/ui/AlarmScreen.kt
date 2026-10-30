@@ -51,6 +51,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -60,6 +61,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import dev.homepanel.app.DoorbellCameraUiState
 import dev.homepanel.app.GuestWifiUiState
 import dev.homepanel.app.HouseSummaryUiState
 import dev.homepanel.app.R
@@ -98,6 +100,7 @@ fun AlarmScreen(
     guestWifiState: GuestWifiUiState,
     houseSummaryState: HouseSummaryUiState,
     lightAreas: List<LightAreaState>,
+    doorbellCameraState: DoorbellCameraUiState,
     history: List<PanelEvent>,
     onAction: (AlarmAction, String?) -> Unit,
     onRetryAlarmoArm: () -> Unit,
@@ -110,6 +113,8 @@ fun AlarmScreen(
     onRefreshWeather: () -> Unit,
     onRefreshHouse: () -> Unit,
     onSetLights: (Collection<String>, Boolean) -> Unit,
+    onDismissDoorbellCamera: () -> Unit,
+    onShowDoorbellCamera: () -> Unit,
     onClearHistory: () -> Unit,
     onSettings: () -> Unit
 ) {
@@ -306,6 +311,13 @@ fun AlarmScreen(
         WeatherWarningDialog(
             warnings = weatherWarnings,
             onDismiss = { showWeatherAlert = false }
+        )
+    }
+
+    if (doorbellCameraState.visible) {
+        DoorbellCameraDialog(
+            state = doorbellCameraState,
+            onDismiss = onDismissDoorbellCamera
         )
     }
 
@@ -889,6 +901,78 @@ private fun PersonsMapDialog(
                             "● ${person.friendlyName} — ${personZoneName(person, zones)}$accuracy",
                             style = MaterialTheme.typography.bodyMedium
                         )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun DoorbellCameraDialog(
+    state: DoorbellCameraUiState,
+    onDismiss: () -> Unit
+) {
+    val bitmap = remember(state.imageBytes) {
+        state.imageBytes?.let { bytes ->
+            runCatching { BitmapFactory.decodeByteArray(bytes, 0, bytes.size)?.asImageBitmap() }.getOrNull()
+        }
+    }
+
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(usePlatformDefaultWidth = false)
+    ) {
+        Surface(
+            modifier = Modifier.fillMaxWidth(0.96f).fillMaxHeight(0.92f),
+            color = MaterialTheme.colorScheme.background,
+            shape = MaterialTheme.shapes.extraLarge,
+            tonalElevation = 10.dp
+        ) {
+            Column(modifier = Modifier.fillMaxSize()) {
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 12.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text("🔔", style = MaterialTheme.typography.headlineMedium)
+                    Spacer(Modifier.width(10.dp))
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            state.friendlyName ?: "Doorbell camera",
+                            style = MaterialTheme.typography.titleLarge,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Text(
+                            "Someone is at the door",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    if (state.isLoading) {
+                        CircularProgressIndicator(modifier = Modifier.size(22.dp), strokeWidth = 2.dp)
+                        Spacer(Modifier.width(8.dp))
+                    }
+                    OutlinedButton(onClick = onDismiss) { Text(stringResource(R.string.close)) }
+                }
+
+                Box(
+                    modifier = Modifier.fillMaxWidth().weight(1f),
+                    contentAlignment = Alignment.Center
+                ) {
+                    when {
+                        bitmap != null -> Image(
+                            bitmap = bitmap,
+                            contentDescription = state.friendlyName ?: "Doorbell camera",
+                            modifier = Modifier.fillMaxSize(),
+                            contentScale = ContentScale.Fit
+                        )
+                        !state.errorMessage.isNullOrBlank() -> Text(
+                            state.errorMessage.orEmpty(),
+                            color = MaterialTheme.colorScheme.error,
+                            textAlign = TextAlign.Center,
+                            modifier = Modifier.padding(24.dp)
+                        )
+                        else -> CircularProgressIndicator()
                     }
                 }
             }
