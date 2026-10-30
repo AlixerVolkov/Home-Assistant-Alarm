@@ -23,6 +23,12 @@ data class WeatherEntitySummary(
     val condition: String
 )
 
+data class CameraEntitySummary(
+    val entityId: String,
+    val friendlyName: String,
+    val state: String
+)
+
 data class GuestWifiSummary(
     val displayName: String,
     val voucherSensorEntityId: String,
@@ -36,7 +42,8 @@ data class PanelDiscoveryResult(
     val alarms: List<AlarmEntitySummary>,
     val wakeSensors: List<WakeSensorSummary>,
     val guestWifi: List<GuestWifiSummary> = emptyList(),
-    val weatherEntities: List<WeatherEntitySummary> = emptyList()
+    val weatherEntities: List<WeatherEntitySummary> = emptyList(),
+    val cameras: List<CameraEntitySummary> = emptyList()
 )
 
 data class AlarmEntityState(
