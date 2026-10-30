@@ -16,6 +16,7 @@ import dev.homepanel.app.data.SettingsRepository
 import dev.homepanel.app.diagnostics.CrashLogStore
 import dev.homepanel.app.network.AlarmAction
 import dev.homepanel.app.network.AlarmEntitySummary
+import dev.homepanel.app.network.CameraEntitySummary
 import dev.homepanel.app.network.ConnectionStatus
 import dev.homepanel.app.network.DeviceLocation
 import dev.homepanel.app.network.DeviceLocationResolver
@@ -52,6 +53,7 @@ data class DiscoveryState(
     val wakeSensors: List<WakeSensorSummary> = emptyList(),
     val guestWifi: List<GuestWifiSummary> = emptyList(),
     val weatherEntities: List<WeatherEntitySummary> = emptyList(),
+    val cameras: List<CameraEntitySummary> = emptyList(),
     val errorMessage: String? = null
 )
 
@@ -76,6 +78,15 @@ data class GuestWifiUiState(
 data class HouseSummaryUiState(
     val isLoading: Boolean = false,
     val summary: HouseSummary? = null,
+    val errorMessage: String? = null
+)
+
+data class DoorbellCameraUiState(
+    val visible: Boolean = false,
+    val entityId: String? = null,
+    val friendlyName: String? = null,
+    val imageBytes: ByteArray? = null,
+    val isLoading: Boolean = false,
     val errorMessage: String? = null
 )
 
@@ -148,6 +159,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val _houseSummary = MutableStateFlow(HouseSummaryUiState())
     val houseSummary: StateFlow<HouseSummaryUiState> = _houseSummary.asStateFlow()
     val lightAreas = socketClient.lightAreas
+
+    private val _doorbellCamera = MutableStateFlow(DoorbellCameraUiState())
+    val doorbellCamera: StateFlow<DoorbellCameraUiState> = _doorbellCamera.asStateFlow()
+    private var doorbellCameraJob: Job? = null
 
     private val _update = MutableStateFlow(UpdateUiState())
     val update: StateFlow<UpdateUiState> = _update.asStateFlow()
@@ -269,6 +284,13 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             socketClient.entityEvents.collect { event ->
                 val normalized = event.state.lowercase()
+                val currentSettings = _settings.value
+                if (currentSettings != null &&
+                    event.entityId == currentSettings.doorbellTriggerEntityId &&
+                    normalized in setOf("on", "open", "detected", "pressed", "true")
+                ) {
+                    showDoorbellCamera()
+                }
                 val message = when {
                     event.entityId.startsWith("light.") -> "${event.friendlyName}: ${if (normalized == "on") "on" else "off"}"
                     event.entityId.startsWith("person.") -> "${event.friendlyName}: $normalized"
@@ -416,6 +438,53 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun clearHistory() = historyRepository.clear()
 
+    fun showDoorbellCamera() {
+        val current = _settings.value ?: return
+        val cameraEntityId = current.doorbellCameraEntityId?.takeIf { it.isNotBlank() } ?: return
+        wakeDisplay()
+        doorbellCameraJob?.cancel()
+        _doorbellCamera.value = DoorbellCameraUiState(
+            visible = true,
+            entityId = cameraEntityId,
+            friendlyName = _discovery.value.cameras.firstOrNull { it.entityId == cameraEntityId }?.friendlyName
+                ?: cameraEntityId.substringAfter('.').replace('_', ' '),
+            isLoading = true
+        )
+        doorbellCameraJob = viewModelScope.launch {
+            val closeAfterMs = current.doorbellAutoCloseSeconds.coerceIn(5, 300) * 1000L
+            val started = SystemClock.elapsedRealtime()
+            while (isActive && _doorbellCamera.value.visible &&
+                SystemClock.elapsedRealtime() - started < closeAfterMs
+            ) {
+                runCatching {
+                    restClient.fetchCameraImage(current.baseUrl, current.accessToken, cameraEntityId)
+                }.onSuccess { bytes ->
+                    _doorbellCamera.value = _doorbellCamera.value.copy(
+                        imageBytes = bytes,
+                        isLoading = false,
+                        errorMessage = null
+                    )
+                }.onFailure { error ->
+                    _doorbellCamera.value = _doorbellCamera.value.copy(
+                        isLoading = false,
+                        errorMessage = error.message ?: "Could not load camera"
+                    )
+                }
+                delay(1000L)
+            }
+            if (_doorbellCamera.value.visible) {
+                _doorbellCamera.value = DoorbellCameraUiState()
+            }
+        }
+    }
+
+    fun dismissDoorbellCamera() {
+        doorbellCameraJob?.cancel()
+        doorbellCameraJob = null
+        _doorbellCamera.value = DoorbellCameraUiState()
+        userActivity()
+    }
+
     fun refreshHouseSummary() {
         userActivity()
         loadHouseSummary(showSpinner = _houseSummary.value.summary == null)
@@ -469,7 +538,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                         alarms = result.alarms,
                         wakeSensors = result.wakeSensors,
                         guestWifi = result.guestWifi,
-                        weatherEntities = result.weatherEntities
+                        weatherEntities = result.weatherEntities,
+                        cameras = result.cameras
                     )
                 }
                 .onFailure { error ->
@@ -515,6 +585,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             guestCreateButtonEntityId = draft.guestCreateButtonEntityId?.trim()?.takeIf { it.isNotBlank() },
             guestDeleteButtonEntityId = draft.guestDeleteButtonEntityId?.trim()?.takeIf { it.isNotBlank() },
             guestQrImageEntityId = draft.guestQrImageEntityId?.trim()?.takeIf { it.isNotBlank() },
+            doorbellCameraEntityId = draft.doorbellCameraEntityId?.trim()?.takeIf { it.isNotBlank() },
+            doorbellTriggerEntityId = draft.doorbellTriggerEntityId?.trim()?.takeIf { it.isNotBlank() },
+            doorbellAutoCloseSeconds = draft.doorbellAutoCloseSeconds.coerceIn(5, 300),
             mqttHost = draft.mqttHost.trim(),
             mqttPort = draft.mqttPort.coerceIn(1, 65535),
             mqttUsername = draft.mqttUsername.trim()
@@ -821,6 +894,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 token = settings.accessToken,
                 entityId = settings.alarmEntityId,
                 wakeEntityIds = (settings.wakeEntityIds + listOfNotNull(settings.wakeEntityId)).distinct(),
+                monitoredEntityIds = listOfNotNull(settings.doorbellTriggerEntityId),
                 guestVoucherSensorEntityId = settings.guestVoucherSensorEntityId,
                 guestCreateButtonEntityId = settings.guestCreateButtonEntityId,
                 guestDeleteButtonEntityId = settings.guestDeleteButtonEntityId
