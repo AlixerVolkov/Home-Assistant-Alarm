@@ -78,6 +78,7 @@ fun HomePanelApp(viewModel: MainViewModel) {
     val guestWifi by viewModel.guestWifi.collectAsStateWithLifecycle()
     val houseSummary by viewModel.houseSummary.collectAsStateWithLifecycle()
     val lightAreas by viewModel.lightAreas.collectAsStateWithLifecycle()
+    val doorbellCamera by viewModel.doorbellCamera.collectAsStateWithLifecycle()
     val history by viewModel.history.collectAsStateWithLifecycle()
     val update by viewModel.update.collectAsStateWithLifecycle()
     val networkDiagnostics by viewModel.networkDiagnostics.collectAsStateWithLifecycle()
@@ -431,6 +432,7 @@ fun HomePanelApp(viewModel: MainViewModel) {
                 guestWifiState = guestWifi,
                 houseSummaryState = houseSummary,
                 lightAreas = lightAreas,
+                doorbellCameraState = doorbellCamera,
                 history = history,
                 onAction = viewModel::performAction,
                 onRetryAlarmoArm = viewModel::retryFailedAlarmoArm,
@@ -443,6 +445,8 @@ fun HomePanelApp(viewModel: MainViewModel) {
                 onRefreshWeather = viewModel::refreshWeather,
                 onRefreshHouse = viewModel::refreshHouseSummary,
                 onSetLights = viewModel::setLights,
+                onDismissDoorbellCamera = viewModel::dismissDoorbellCamera,
+                onShowDoorbellCamera = viewModel::showDoorbellCamera,
                 onClearHistory = viewModel::clearHistory,
                 onSettings = {
                     if (currentSettings.kioskModeEnabled && currentSettings.settingsPin.isNotBlank()) {
