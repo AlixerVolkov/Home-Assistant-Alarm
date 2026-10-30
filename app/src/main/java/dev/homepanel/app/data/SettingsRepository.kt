@@ -57,6 +57,9 @@ class SettingsRepository(
                         ?.takeIf { it.isNotBlank() && it.endsWith("_create") }
                         ?.let { it.removeSuffix("_create") + "_delete" },
                 guestQrImageEntityId = preferences[KEY_GUEST_QR_IMAGE]?.takeIf { it.isNotBlank() },
+                doorbellCameraEntityId = preferences[KEY_DOORBELL_CAMERA_ENTITY]?.takeIf { it.isNotBlank() },
+                doorbellTriggerEntityId = preferences[KEY_DOORBELL_TRIGGER_ENTITY]?.takeIf { it.isNotBlank() },
+                doorbellAutoCloseSeconds = preferences[KEY_DOORBELL_AUTO_CLOSE_SECONDS] ?: 30,
                 mqttDiscoveryEnabled = preferences[KEY_MQTT_DISCOVERY_ENABLED] ?: false,
                 mqttHost = preferences[KEY_MQTT_HOST].orEmpty(),
                 mqttPort = preferences[KEY_MQTT_PORT] ?: 1883,
@@ -103,6 +106,9 @@ class SettingsRepository(
             preferences[KEY_GUEST_CREATE_BUTTON] = settings.guestCreateButtonEntityId?.trim().orEmpty()
             preferences[KEY_GUEST_DELETE_BUTTON] = settings.guestDeleteButtonEntityId?.trim().orEmpty()
             preferences[KEY_GUEST_QR_IMAGE] = settings.guestQrImageEntityId?.trim().orEmpty()
+            preferences[KEY_DOORBELL_CAMERA_ENTITY] = settings.doorbellCameraEntityId?.trim().orEmpty()
+            preferences[KEY_DOORBELL_TRIGGER_ENTITY] = settings.doorbellTriggerEntityId?.trim().orEmpty()
+            preferences[KEY_DOORBELL_AUTO_CLOSE_SECONDS] = settings.doorbellAutoCloseSeconds.coerceIn(5, 300)
             preferences[KEY_MQTT_DISCOVERY_ENABLED] = settings.mqttDiscoveryEnabled
             preferences[KEY_MQTT_HOST] = settings.mqttHost.trim()
             preferences[KEY_MQTT_PORT] = settings.mqttPort.coerceIn(1, 65535)
@@ -141,6 +147,9 @@ class SettingsRepository(
             preferences.remove(KEY_GUEST_CREATE_BUTTON)
             preferences.remove(KEY_GUEST_DELETE_BUTTON)
             preferences.remove(KEY_GUEST_QR_IMAGE)
+            preferences.remove(KEY_DOORBELL_CAMERA_ENTITY)
+            preferences.remove(KEY_DOORBELL_TRIGGER_ENTITY)
+            preferences.remove(KEY_DOORBELL_AUTO_CLOSE_SECONDS)
             preferences.remove(KEY_MQTT_DISCOVERY_ENABLED)
             preferences.remove(KEY_MQTT_HOST)
             preferences.remove(KEY_MQTT_PORT)
@@ -186,6 +195,9 @@ class SettingsRepository(
         private val KEY_GUEST_CREATE_BUTTON = stringPreferencesKey("guest_create_button")
         private val KEY_GUEST_DELETE_BUTTON = stringPreferencesKey("guest_delete_button")
         private val KEY_GUEST_QR_IMAGE = stringPreferencesKey("guest_qr_image")
+        private val KEY_DOORBELL_CAMERA_ENTITY = stringPreferencesKey("doorbell_camera_entity")
+        private val KEY_DOORBELL_TRIGGER_ENTITY = stringPreferencesKey("doorbell_trigger_entity")
+        private val KEY_DOORBELL_AUTO_CLOSE_SECONDS = intPreferencesKey("doorbell_auto_close_seconds")
         private val KEY_MQTT_DISCOVERY_ENABLED = booleanPreferencesKey("mqtt_discovery_enabled")
         private val KEY_MQTT_HOST = stringPreferencesKey("mqtt_host")
         private val KEY_MQTT_PORT = intPreferencesKey("mqtt_port")
