@@ -180,8 +180,10 @@ fun AlarmScreen(
                     state = houseSummaryState,
                     lightAreas = lightAreas,
                     onRefresh = onRefreshHouse,
+                    showCamera = !settings.doorbellCameraEntityId.isNullOrBlank(),
                     onShowMap = { showPeopleMap = true },
-                    onShowLights = { showLights = true }
+                    onShowLights = { showLights = true },
+                    onShowCamera = onShowDoorbellCamera
                 )
                 if (!settings.guestVoucherSensorEntityId.isNullOrBlank()) {
                     GuestWifiEntryCard(
@@ -243,8 +245,10 @@ fun AlarmScreen(
                                 state = houseSummaryState,
                                 lightAreas = lightAreas,
                                 onRefresh = onRefreshHouse,
+                                showCamera = !settings.doorbellCameraEntityId.isNullOrBlank(),
                                 onShowMap = { showPeopleMap = true },
-                                onShowLights = { showLights = true }
+                                onShowLights = { showLights = true },
+                                onShowCamera = onShowDoorbellCamera
                             )
                         }
                     }
@@ -644,8 +648,10 @@ private fun HouseSummaryCard(
     state: HouseSummaryUiState,
     lightAreas: List<LightAreaState>,
     onRefresh: () -> Unit,
+    showCamera: Boolean,
     onShowMap: () -> Unit,
-    onShowLights: () -> Unit
+    onShowLights: () -> Unit,
+    onShowCamera: () -> Unit
 ) {
     val summary = state.summary
     Card(
@@ -718,6 +724,9 @@ private fun HouseSummaryCard(
                     }
                     if (summary.persons.any(::isHomeAssistantPerson)) {
                         FilledTonalButton(onClick = onShowMap, modifier = Modifier.weight(1f)) { Text("📍  Map") }
+                    }
+                    if (showCamera) {
+                        FilledTonalButton(onClick = onShowCamera, modifier = Modifier.weight(1f)) { Text("📷  Camera") }
                     }
                 }
             }
